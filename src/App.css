@@ -1,0 +1,224 @@
+/* ============================================================
+   App layout
+   ============================================================ */
+
+.app {
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 0 16px;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ============================================================
+   Header
+   ============================================================ */
+
+.app__header {
+  padding: 40px 0 24px;
+  text-align: center;
+}
+
+.app__title {
+  font-size: 2rem;
+  font-weight: 700;
+  margin: 0 0 12px;
+  color: #1a1a2e;
+  letter-spacing: -0.5px;
+}
+
+.app__description {
+  font-size: 0.95rem;
+  color: #555;
+  line-height: 1.6;
+  max-width: 600px;
+  margin: 0 auto;
+}
+
+/* ============================================================
+   Main
+   ============================================================ */
+
+.app__main {
+  flex: 1;
+  padding: 8px 0 40px;
+}
+
+/* ============================================================
+   Footer
+   ============================================================ */
+
+.app__footer {
+  text-align: center;
+  padding: 16px 0 24px;
+  border-top: 1px solid #e8e8e8;
+}
+
+.app__github-link {
+  color: #555;
+  text-decoration: none;
+  font-size: 0.875rem;
+  transition: color 0.2s;
+}
+
+.app__github-link:hover {
+  color: #1a1a2e;
+}
+
+/* ============================================================
+   ImageFaceMosaic
+   ============================================================ */
+
+.image-face-mosaic {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  align-items: center;
+}
+
+/* ============================================================
+   Drop zone
+   ============================================================ */
+
+.drop-zone {
+  width: 100%;
+  max-width: 600px;
+  border: 2px dashed #aaa;
+  border-radius: 12px;
+  padding: 48px 24px;
+  text-align: center;
+  cursor: pointer;
+  background: #fff;
+  transition: border-color 0.2s, background-color 0.2s;
+  box-sizing: border-box;
+  user-select: none;
+}
+
+.drop-zone:hover:not(.drop-zone--disabled) {
+  border-color: #4a90e2;
+  background-color: #f0f7ff;
+}
+
+.drop-zone:focus-visible {
+  outline: 3px solid #4a90e2;
+  outline-offset: 2px;
+}
+
+.drop-zone--dragging {
+  border-color: #4a90e2;
+  background-color: #e8f2ff;
+}
+
+.drop-zone--disabled {
+  border-color: #ddd;
+  background-color: #f5f5f5;
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.drop-zone__content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+.drop-zone__icon {
+  font-size: 2.5rem;
+  line-height: 1;
+}
+
+.drop-zone__text {
+  font-size: 1rem;
+  color: #333;
+  margin: 0;
+  line-height: 1.6;
+}
+
+.drop-zone__hint {
+  font-size: 0.8rem;
+  color: #888;
+  margin: 0;
+}
+
+/* ============================================================
+   Loading
+   ============================================================ */
+
+.loading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #555;
+  font-size: 0.95rem;
+}
+
+.loading__spinner {
+  display: inline-block;
+  width: 18px;
+  height: 18px;
+  border: 2px solid #ccc;
+  border-top-color: #4a90e2;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  flex-shrink: 0;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ============================================================
+   Error
+   ============================================================ */
+
+.error {
+  width: 100%;
+  max-width: 600px;
+  padding: 12px 16px;
+  border-radius: 8px;
+  background-color: #fff5f5;
+  border: 1px solid #feb2b2;
+  color: #c53030;
+  font-size: 0.9rem;
+  line-height: 1.5;
+  box-sizing: border-box;
+}
+
+/* ============================================================
+   Mosaic canvas
+   ============================================================ */
+
+.mosaic-canvas-wrapper {
+  width: 100%;
+  max-width: 600px;
+}
+
+.mosaic-canvas {
+  max-width: 100%;
+  height: auto;
+  display: block;
+  border-radius: 8px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
+}
+
+/* ============================================================
+   Responsive
+   ============================================================ */
+
+@media (max-width: 600px) {
+  .app__title {
+    font-size: 1.6rem;
+  }
+
+  .app__header {
+    padding: 24px 0 16px;
+  }
+
+  .drop-zone {
+    padding: 36px 16px;
+  }
+}
