@@ -12,7 +12,7 @@
  * | 5 | 正常系     | 推論中の状態                             | isProcessing が true になる          |
  * | 6 | 異常系     | getFaceSession が例外をスロー            | error がセット、[] が返る            |
  * | 7 | 異常系     | runFaceDetection が例外をスロー          | error がセット、[] が返る            |
- * | 8 | 異常系     | 出力に selected_boxes がない             | error がセット、[] が返る            |
+ * | 8 | 異常系     | 出力に selectedBoxes がない             | error がセット、[] が返る            |
  * | 9 | 境界値     | getFaceSession が非 Error をスロー       | fallback エラーメッセージがセット     |
  * |10 | 境界値     | runFaceDetection が非 Error をスロー     | fallback エラーメッセージがセット     |
  */
@@ -95,7 +95,7 @@ describe('useFaceDetection', () => {
         originalHeight: 480,
       })
       vi.mocked(runFaceDetection).mockResolvedValue({
-        selected_boxes: {
+        selectedBoxes: {
           data: boxes,
           dims: [1, 1, 16],
           type: 'float32',
@@ -132,7 +132,7 @@ describe('useFaceDetection', () => {
         originalHeight: 100,
       })
       vi.mocked(runFaceDetection).mockResolvedValue({
-        selected_boxes: {
+        selectedBoxes: {
           data: boxes,
           dims: [1, 0, 16],
           type: 'float32',
@@ -167,7 +167,7 @@ describe('useFaceDetection', () => {
         originalHeight: 480,
       })
       vi.mocked(runFaceDetection).mockResolvedValue({
-        selected_boxes: {
+        selectedBoxes: {
           data: boxes,
           dims: [1, 1, 16],
           type: 'float32',
@@ -202,7 +202,7 @@ describe('useFaceDetection', () => {
         originalHeight: 100,
       })
       vi.mocked(runFaceDetection).mockResolvedValue({
-        selected_boxes: {
+        selectedBoxes: {
           data: new Float32Array(0),
           dims: [1, 0, 16],
           type: 'float32',
@@ -230,7 +230,7 @@ describe('useFaceDetection', () => {
         originalHeight: 100,
       })
       vi.mocked(runFaceDetection).mockResolvedValue({
-        selected_boxes: {
+        selectedBoxes: {
           data: new Float32Array(0),
           dims: [1, 0, 16],
           type: 'float32',
@@ -302,7 +302,7 @@ describe('useFaceDetection', () => {
       expect(result.current.isProcessing).toBe(false)
     })
 
-    it('TC-08: 出力に selected_boxes がない場合 — error がセットされ [] が返る', async () => {
+    it('TC-08: 出力に selectedBoxes がない場合 — error がセットされ [] が返る', async () => {
       // Given
       vi.mocked(getFaceSession).mockResolvedValue(createMockSession())
       vi.mocked(preprocessImageToTensor).mockReturnValue({
@@ -310,7 +310,7 @@ describe('useFaceDetection', () => {
         originalWidth: 100,
         originalHeight: 100,
       })
-      // selected_boxes を含まない出力
+      // selectedBoxes を含まない出力
       vi.mocked(runFaceDetection).mockResolvedValue({})
 
       const { result } = renderHook(() => useFaceDetection())
@@ -324,7 +324,7 @@ describe('useFaceDetection', () => {
       // Then
       expect(faces).toEqual([])
       expect(result.current.error).toBe(
-        'モデルの出力に selected_boxes が含まれていません',
+        'モデルの出力に selectedBoxes が含まれていません',
       )
     })
   })
@@ -384,7 +384,7 @@ describe('useFaceDetection', () => {
         originalHeight: 100,
       })
       vi.mocked(runFaceDetection).mockResolvedValue({
-        selected_boxes: {
+        selectedBoxes: {
           data: new Float32Array(0),
           dims: [1, 0, 16],
           type: 'float32',

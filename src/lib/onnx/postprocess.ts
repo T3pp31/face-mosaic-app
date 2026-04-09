@@ -1,5 +1,4 @@
 import {
-  BLAZEFACE_ANCHOR_COUNT,
   VALUES_PER_DETECTION,
   MIN_FACE_SIZE,
 } from '@/config/constants'
@@ -15,12 +14,12 @@ export type FaceBox = {
 /**
  * モデル出力の selectedBoxes を FaceBox 配列に変換する
  *
- * selectedBoxes は [1, 896, 16] の Float32Array（flatten 済み）
+ * selectedBoxes は [1, N, 16] の Float32Array（flatten 済み、N は検出数）
  * 各行の 16 値: [y_center, x_center, h, w, kp1_y, kp1_x, ..., kp6_y, kp6_x]
  * 正規化座標 (0-1) を originalWidth/Height でスケールする
  * NMS はモデル内蔵のため score は 1.0 固定
  *
- * @param selectedBoxes   推論出力 Float32Array（長さ = 896 × 16）
+ * @param selectedBoxes   推論出力 Float32Array（長さ = N × 16）
  * @param originalWidth   元画像の幅（px）
  * @param originalHeight  元画像の高さ（px）
  * @returns               有効な FaceBox の配列
@@ -31,8 +30,9 @@ export function postprocessDetections(
   originalHeight: number,
 ): FaceBox[] {
   const results: FaceBox[] = []
+  const numDetections = selectedBoxes.length / VALUES_PER_DETECTION
 
-  for (let i = 0; i < BLAZEFACE_ANCHOR_COUNT; i++) {
+  for (let i = 0; i < numDetections; i++) {
     const offset = i * VALUES_PER_DETECTION
 
     const yCenter = selectedBoxes[offset]

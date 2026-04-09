@@ -1,10 +1,11 @@
 import { describe, it, expect } from 'vitest'
 import { postprocessDetections, type FaceBox } from '@/lib/onnx/postprocess'
 import {
-  BLAZEFACE_ANCHOR_COUNT,
   VALUES_PER_DETECTION,
   MIN_FACE_SIZE,
 } from '@/config/constants'
+
+const BLAZEFACE_ANCHOR_COUNT = 896
 
 // ---------------------------------------------------------------------------
 // テスト観点表（等価分割・境界値）

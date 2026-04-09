@@ -47,9 +47,9 @@ export function useFaceDetection(): UseFaceDetectionResult {
         const prep = preprocessImageToTensor(image)
         const output = await runFaceDetection(session, prep.tensor)
 
-        const selectedBoxes = output['selected_boxes']
+        const selectedBoxes = output['selectedBoxes']
         if (!selectedBoxes) {
-          throw new Error('モデルの出力に selected_boxes が含まれていません')
+          throw new Error('モデルの出力に selectedBoxes が含まれていません')
         }
 
         const boxesData = selectedBoxes.data as Float32Array
