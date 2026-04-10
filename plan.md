@@ -11,7 +11,7 @@
 ```text
 [入力画像]
     ↓
-[前処理: 128x128 resize, RGB CHW, 0-1 normalize]
+[前処理: 128x128 resize, RGB CHW, [-1,1] normalize]
     ↓
 [ONNX Runtime Web (wasm) で顔検出]
     ↓
@@ -43,7 +43,7 @@
 
 | テンソル名 | 形状 | 型 | 説明 |
 |-----------|------|-----|------|
-| `image` | [1, 3, 128, 128] | float32 | RGB, 0-1正規化 |
+| `image` | [1, 3, 128, 128] | float32 | RGB, [-1,1]正規化 |
 | `conf_threshold` | [1] | float32 | 信頼度閾値 (デフォルト: 0.5) |
 | `iou_threshold` | [1] | float32 | NMS IoU閾値 (デフォルト: 0.3) |
 | `max_detections` | [1] | int64 | 最大検出数 (デフォルト: 25) |
@@ -127,7 +127,7 @@ HTMLImageElement 生成 (URL.createObjectURL → img.decode())
 preprocessImageToTensor()
   - Canvas で 128x128 にリサイズ
   - RGBA → RGB CHW 変換
-  - 0-1 正規化
+  - [-1, 1] 正規化 (÷127.5 − 1)
   - ort.Tensor [1, 3, 128, 128] 作成
   ↓
 runFaceDetection()
@@ -156,7 +156,7 @@ drawImageWithMosaic()
 | `MODEL_PATH` | `${BASE_URL}models/blaze.onnx` | モデルファイルパス |
 | `MODEL_INPUT_NAME` | `'image'` | 入力テンソル名 |
 | `MODEL_INPUT_SIZE` | `128` | モデル入力サイズ |
-| `CONF_THRESHOLD` | `0.5` | 信頼度閾値 |
+| `CONF_THRESHOLD` | `0.3` | 信頼度閾値 |
 | `IOU_THRESHOLD` | `0.3` | NMS IoU閾値 |
 | `MAX_DETECTIONS` | `25` | 最大検出数 |
 | `MOSAIC_SCALE` | `0.08` | モザイクの粗さ |

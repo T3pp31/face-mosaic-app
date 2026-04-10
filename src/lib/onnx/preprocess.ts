@@ -12,7 +12,7 @@ export type PreprocessResult = {
  *
  * - Canvas で inputSize × inputSize にリサイズ
  * - RGBA → RGB CHW 変換（R/G/B の順で平面化）
- * - 0-1 正規化（÷255）
+ * - [-1, 1] 正規化（÷127.5 − 1）
  *
  * @param image      入力画像 / 動画 / Canvas 要素
  * @param inputSize  モデル入力サイズ（デフォルト: MODEL_INPUT_SIZE）
@@ -48,9 +48,9 @@ export function preprocessImageToTensor(
 
   for (let i = 0; i < pixelCount; i++) {
     const srcIdx = i * 4
-    float32Data[i] = data[srcIdx] / 255 // R チャンネル
-    float32Data[pixelCount + i] = data[srcIdx + 1] / 255 // G チャンネル
-    float32Data[2 * pixelCount + i] = data[srcIdx + 2] / 255 // B チャンネル
+    float32Data[i] = data[srcIdx] / 127.5 - 1.0 // R チャンネル
+    float32Data[pixelCount + i] = data[srcIdx + 1] / 127.5 - 1.0 // G チャンネル
+    float32Data[2 * pixelCount + i] = data[srcIdx + 2] / 127.5 - 1.0 // B チャンネル
   }
 
   const tensor = new ort.Tensor('float32', float32Data, [1, 3, inputSize, inputSize])

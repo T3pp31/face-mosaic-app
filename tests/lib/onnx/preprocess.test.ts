@@ -15,9 +15,9 @@ import { MODEL_INPUT_SIZE } from '@/config/constants'
 // | 6 | 境界値: inputSize=1               | inputSize=1                                | shape [1,3,1,1]                       |
 // | 7 | 境界値: カスタム inputSize         | inputSize=64                               | shape [1,3,64,64]                     |
 // | 8 | デフォルト inputSize               | 引数省略                                   | MODEL_INPUT_SIZE 使用                 |
-// | 9 | 0-1 正規化確認                     | 白ピクセル (255,255,255) の Canvas         | 全値が 1.0 付近                       |
-// |10 | 0-1 正規化確認                     | 黒ピクセル (0,0,0) の Canvas               | 全値が 0.0                            |
-// |11 | CHW 変換確認                       | R=255,G=0,B=0 の Canvas                   | R 平面=1, G/B 平面=0                  |
+// | 9 | [-1,1] 正規化確認                  | 白ピクセル (255,255,255) の Canvas         | 全値が 1.0 付近                       |
+// |10 | [-1,1] 正規化確認                  | 黒ピクセル (0,0,0) の Canvas               | 全値が -1.0                           |
+// |11 | CHW 変換確認                       | R=255,G=0,B=0 の Canvas                   | R 平面=1, G/B 平面=-1                 |
 // |12 | 異常系: getContext null            | Canvas.getContext が null を返す           | Error スロー                          |
 // |13 | tensor 型が float32                | 通常入力                                   | tensor.type === 'float32'             |
 // |14 | tensor dims が 4 次元              | 通常入力                                   | tensor.dims.length === 4              |
@@ -228,7 +228,7 @@ describe('preprocessImageToTensor', () => {
   })
 
   // -----------------------------------------------------------------------
-  // 0-1 正規化 & CHW 変換
+  // [-1,1] 正規化 & CHW 変換
   // -----------------------------------------------------------------------
 
   it('TC09: 白ピクセル(255,255,255)のとき全チャンネル値が 1.0', () => {
@@ -244,13 +244,13 @@ describe('preprocessImageToTensor', () => {
     const { tensor } = preprocessImageToTensor(img)
     const data = tensor.data as Float32Array
 
-    // Then
+    // Then: 255 / 127.5 - 1.0 = 1.0
     for (let i = 0; i < data.length; i++) {
       expect(data[i]).toBeCloseTo(1.0)
     }
   })
 
-  it('TC10: 黒ピクセル(0,0,0)のとき全チャンネル値が 0.0', () => {
+  it('TC10: 黒ピクセル(0,0,0)のとき全チャンネル値が -1.0', () => {
     // Given: 全ピクセルが黒 (RGBA = 0,0,0,255)
     mockCanvasContext((size) => {
       const data = new Uint8ClampedArray(size * 4)
@@ -266,13 +266,13 @@ describe('preprocessImageToTensor', () => {
     const { tensor } = preprocessImageToTensor(img)
     const data = tensor.data as Float32Array
 
-    // Then
+    // Then: 0 / 127.5 - 1.0 = -1.0
     for (let i = 0; i < data.length; i++) {
-      expect(data[i]).toBeCloseTo(0.0)
+      expect(data[i]).toBeCloseTo(-1.0)
     }
   })
 
-  it('TC11: R=255,G=0,B=0 ピクセルのとき R 平面=1.0, G/B 平面=0.0', () => {
+  it('TC11: R=255,G=0,B=0 ピクセルのとき R 平面=1.0, G/B 平面=-1.0', () => {
     // Given: 全ピクセルが赤 (RGBA = 255,0,0,255)
     const inputSize = 4
     mockCanvasContext((size) => {
@@ -292,17 +292,17 @@ describe('preprocessImageToTensor', () => {
     const data = tensor.data as Float32Array
     const pixelCount = inputSize * inputSize
 
-    // Then: R 平面 (index 0..pixelCount-1) = 1.0
+    // Then: R 平面 (index 0..pixelCount-1) = 1.0 (255/127.5 - 1.0)
     for (let i = 0; i < pixelCount; i++) {
       expect(data[i]).toBeCloseTo(1.0)
     }
-    // G 平面 (index pixelCount..2*pixelCount-1) = 0.0
+    // G 平面 (index pixelCount..2*pixelCount-1) = -1.0 (0/127.5 - 1.0)
     for (let i = pixelCount; i < 2 * pixelCount; i++) {
-      expect(data[i]).toBeCloseTo(0.0)
+      expect(data[i]).toBeCloseTo(-1.0)
     }
-    // B 平面 (index 2*pixelCount..3*pixelCount-1) = 0.0
+    // B 平面 (index 2*pixelCount..3*pixelCount-1) = -1.0 (0/127.5 - 1.0)
     for (let i = 2 * pixelCount; i < 3 * pixelCount; i++) {
-      expect(data[i]).toBeCloseTo(0.0)
+      expect(data[i]).toBeCloseTo(-1.0)
     }
   })
 

@@ -6,7 +6,7 @@ export const MODEL_PATH = `${import.meta.env.BASE_URL}models/blaze.onnx`
 export const MODEL_INPUT_NAME = 'image'
 export const MODEL_INPUT_SIZE = 128
 
-export const CONF_THRESHOLD = 0.5
+export const CONF_THRESHOLD = 0.3
 export const IOU_THRESHOLD = 0.3
 export const MAX_DETECTIONS = 25
 
