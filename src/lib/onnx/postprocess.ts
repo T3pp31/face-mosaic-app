@@ -14,8 +14,8 @@ export type FaceBox = {
 /**
  * モデル出力の selectedBoxes を FaceBox 配列に変換する
  *
- * selectedBoxes は [1, N, 16] の Float32Array（flatten 済み、N は検出数）
- * 各行の 16 値: [y_center, x_center, h, w, kp1_y, kp1_x, ..., kp6_y, kp6_x]
+ * selectedBoxes は flatten 済み Float32Array（長さ = N × 16）
+ * 各行の 16 値: [y_min, x_min, y_max, x_max, kp1_y, kp1_x, ..., kp6_y, kp6_x]
  * 正規化座標 (0-1) を originalWidth/Height でスケールする
  * NMS はモデル内蔵のため score は 1.0 固定
  *
@@ -35,21 +35,21 @@ export function postprocessDetections(
   for (let i = 0; i < numDetections; i++) {
     const offset = i * VALUES_PER_DETECTION
 
-    const yCenter = selectedBoxes[offset]
-    const xCenter = selectedBoxes[offset + 1]
-    const h = selectedBoxes[offset + 2]
-    const w = selectedBoxes[offset + 3]
+    const yMin = selectedBoxes[offset]
+    const xMin = selectedBoxes[offset + 1]
+    const yMax = selectedBoxes[offset + 2]
+    const xMax = selectedBoxes[offset + 3]
 
     // 全て 0 の行は未使用スロット → スキップ
-    if (yCenter === 0 && xCenter === 0 && h === 0 && w === 0) {
+    if (yMin === 0 && xMin === 0 && yMax === 0 && xMax === 0) {
       continue
     }
 
-    // 正規化座標 → ピクセル座標（center-format → corner-format）
-    const x1 = (xCenter - w / 2) * originalWidth
-    const y1 = (yCenter - h / 2) * originalHeight
-    const x2 = (xCenter + w / 2) * originalWidth
-    const y2 = (yCenter + h / 2) * originalHeight
+    // 正規化座標 → ピクセル座標（corner-format: y_min,x_min,y_max,x_max）
+    const x1 = xMin * originalWidth
+    const y1 = yMin * originalHeight
+    const x2 = xMax * originalWidth
+    const y2 = yMax * originalHeight
 
     // 小さすぎる検出を除外
     const boxWidth = x2 - x1
