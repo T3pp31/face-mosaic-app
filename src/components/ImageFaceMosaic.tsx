@@ -3,6 +3,7 @@ import { ImageUploader } from '@/components/ImageUploader'
 import { MosaicCanvas } from '@/components/MosaicCanvas'
 import { useFaceDetection } from '@/hooks/useFaceDetection'
 import { drawImageWithMosaic } from '@/lib/mosaic/mosaicCanvas'
+import { BBOX_PADDING_RATIO, MOSAIC_SCALE } from '@/config/constants'
 
 /**
  * 顔モザイクのメインコンポーネント
@@ -14,6 +15,8 @@ import { drawImageWithMosaic } from '@/lib/mosaic/mosaicCanvas'
 export function ImageFaceMosaic() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [hasResult, setHasResult] = useState(false)
+  const [paddingRatio, setPaddingRatio] = useState(BBOX_PADDING_RATIO)
+  const [mosaicScale, setMosaicScale] = useState(MOSAIC_SCALE)
 
   const { detectFaces, isModelLoading, isProcessing, error } =
     useFaceDetection()
@@ -30,7 +33,13 @@ export function ImageFaceMosaic() {
       const faces = await detectFaces(image)
 
       if (canvasRef.current) {
-        drawImageWithMosaic(canvasRef.current, image, faces)
+        drawImageWithMosaic(
+          canvasRef.current,
+          image,
+          faces,
+          mosaicScale,
+          paddingRatio,
+        )
         setHasResult(true)
       }
     } finally {
@@ -41,6 +50,34 @@ export function ImageFaceMosaic() {
   return (
     <div className="image-face-mosaic">
       <ImageUploader onFileSelect={handleFileSelect} disabled={isLoading} />
+
+      <div className="mosaic-controls" aria-label="モザイク調整">
+        <label className="mosaic-controls__item" htmlFor="padding-ratio">
+          <span>顔枠を少し広げる量: {paddingRatio.toFixed(2)}</span>
+          <input
+            id="padding-ratio"
+            type="range"
+            min={0}
+            max={0.2}
+            step={0.01}
+            value={paddingRatio}
+            onChange={(event) => setPaddingRatio(Number(event.target.value))}
+          />
+        </label>
+
+        <label className="mosaic-controls__item" htmlFor="mosaic-scale">
+          <span>モザイクの粗さ: {mosaicScale.toFixed(2)}</span>
+          <input
+            id="mosaic-scale"
+            type="range"
+            min={0.02}
+            max={0.2}
+            step={0.01}
+            value={mosaicScale}
+            onChange={(event) => setMosaicScale(Number(event.target.value))}
+          />
+        </label>
+      </div>
 
       {isModelLoading && (
         <div className="loading" role="status" aria-live="polite">

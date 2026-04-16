@@ -77,6 +77,31 @@
   align-items: center;
 }
 
+.mosaic-controls {
+  width: 100%;
+  max-width: 600px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: 10px;
+  border: 1px solid #e8e8e8;
+  background: #fff;
+  box-sizing: border-box;
+}
+
+.mosaic-controls__item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 0.9rem;
+  color: #333;
+}
+
+.mosaic-controls__item input[type='range'] {
+  width: 100%;
+}
+
 /* ============================================================
    Drop zone
    ============================================================ */

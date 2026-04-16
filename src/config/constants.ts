@@ -14,7 +14,7 @@ export const MAX_DETECTIONS = 25
  * Mosaic rendering configuration
  */
 export const MOSAIC_SCALE = 0.08
-export const BBOX_PADDING_RATIO = 0.15
+export const BBOX_PADDING_RATIO = 0.05
 
 /**
  * Minimum face size in pixels to filter out noise detections

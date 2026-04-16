@@ -188,11 +188,9 @@ describe('drawImageWithMosaic', () => {
     it('TC-04: デフォルト引数 — MOSAIC_SCALE と BBOX_PADDING_RATIO が使われる', () => {
       // Given: 640×480 の画像と顔 bbox 1件
       // bbox: x1=100, y1=100, x2=200, y2=200 → bboxW=100, bboxH=100
-      // paddingRatio=BBOX_PADDING_RATIO=0.15 → padX=padY=15
-      // x=max(0,floor(100-15))=85, y=85
-      // x2Clipped=min(640,ceil(200+15))=215, y2Clipped=215
-      // w=215-85=130, h=215-85=130
-      // smallW = max(1, floor(130 * MOSAIC_SCALE))
+      // paddingRatio=BBOX_PADDING_RATIO（既定値）を使って領域を拡張
+      // expandSize = 100 + 100 * BBOX_PADDING_RATIO * 2
+      // smallW = max(1, floor(expandSize * MOSAIC_SCALE))
       const image = createMockImage(640, 480)
       const canvas = document.createElement('canvas')
       setupCanvasMocks(canvas)
@@ -203,8 +201,9 @@ describe('drawImageWithMosaic', () => {
 
       // Then: 一時 canvas のサイズが期待通り (document.createElement のモックで設定された)
       // 検証は mainCtx.drawImage の第4引数 (smallW) と第5引数 (smallH) で確認
-      const expectedSmallW = Math.max(1, Math.floor(130 * MOSAIC_SCALE))
-      const expectedSmallH = Math.max(1, Math.floor(130 * MOSAIC_SCALE))
+      const expandedSize = 100 + 100 * BBOX_PADDING_RATIO * 2
+      const expectedSmallW = Math.max(1, Math.floor(expandedSize * MOSAIC_SCALE))
+      const expectedSmallH = Math.max(1, Math.floor(expandedSize * MOSAIC_SCALE))
       // ctx.drawImage(temp, 0, 0, smallW, smallH, x, y, w, h) の smallW/smallH を確認
       const drawImageCalls = (canvas.getContext('2d') as unknown as { drawImage: ReturnType<typeof vi.fn> })
         ?.drawImage?.mock.calls ?? []

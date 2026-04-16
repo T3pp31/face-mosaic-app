@@ -33,6 +33,7 @@ vi.mock('@/lib/mosaic/mosaicCanvas', () => ({
 import { useFaceDetection } from '@/hooks/useFaceDetection'
 import { drawImageWithMosaic } from '@/lib/mosaic/mosaicCanvas'
 import type { FaceBox } from '@/lib/onnx/postprocess'
+import { BBOX_PADDING_RATIO, MOSAIC_SCALE } from '@/config/constants'
 
 // -----------------------------------------------------------------------
 // ヘルパー
@@ -149,6 +150,41 @@ describe('ImageFaceMosaic', () => {
           expect.any(Object),
           expect.any(Object),
           [],
+          MOSAIC_SCALE,
+          BBOX_PADDING_RATIO,
+        )
+      })
+    })
+
+    it('TC-03b: padding のスライダー操作で drawImageWithMosaic の引数が変わる', async () => {
+      // Given
+      const detectFaces = vi.fn().mockResolvedValue([])
+      setupUseFaceDetectionMock({ detectFaces })
+      render(<ImageFaceMosaic />)
+
+      const input = document.querySelector('input[type="file"]') as HTMLInputElement
+      const file = createImageFile()
+      const paddingSlider = screen.getByLabelText(/顔枠を少し広げる量:/) as HTMLInputElement
+
+      // When
+      fireEvent.change(paddingSlider, { target: { value: '0.12' } })
+
+      await act(async () => {
+        Object.defineProperty(input, 'files', {
+          value: { 0: file, length: 1, item: (i: number) => (i === 0 ? file : null) },
+          configurable: true,
+        })
+        fireEvent.change(input)
+      })
+
+      // Then
+      await waitFor(() => {
+        expect(drawImageWithMosaic).toHaveBeenCalledWith(
+          expect.any(Object),
+          expect.any(Object),
+          [],
+          MOSAIC_SCALE,
+          0.12,
         )
       })
     })
