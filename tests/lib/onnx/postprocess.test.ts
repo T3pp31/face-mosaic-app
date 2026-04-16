@@ -20,6 +20,7 @@ import {
 // | 8 | score: 常に 1.0                   | 有効な検出                            | score===1.0                     |
 // | 9 | 動的サイズ: 小さい配列           | N=2 の入力                            | 正しく2件処理                   |
 // |10 | 異常系: yMin/xMinのみ非ゼロ      | yMax/xMaxが0                          | MIN_FACE_SIZE未満で除外         |
+// |11 | 座標系判定: 0-128 座標入力       | xMax/yMax > 1.0                       | MODEL_INPUT_SIZE 基準で変換     |
 // ---------------------------------------------------------------------------
 
 /**
@@ -181,6 +182,25 @@ describe('postprocessDetections', () => {
     expect(results[0].y1).toBeCloseTo(0)
     expect(results[0].x2).toBeCloseTo(W)
     expect(results[0].y2).toBeCloseTo(H)
+  })
+
+  it('TC14: 0-128 座標入力でも適切なピクセル bbox へ変換される', () => {
+    // Given: MODEL_INPUT_SIZE=128 基準の座標
+    // x:[32,96], y:[16,112] on 640x480 => x:[160,480], y:[60,420]
+    const W = 640
+    const H = 480
+    const boxes = makeZeroBoxes(1)
+    writeBox(boxes, 0, 16, 32, 112, 96)
+
+    // When
+    const results = postprocessDetections(boxes, W, H)
+
+    // Then
+    expect(results).toHaveLength(1)
+    expect(results[0].x1).toBeCloseTo(160)
+    expect(results[0].y1).toBeCloseTo(60)
+    expect(results[0].x2).toBeCloseTo(480)
+    expect(results[0].y2).toBeCloseTo(420)
   })
 
   // -----------------------------------------------------------------------
