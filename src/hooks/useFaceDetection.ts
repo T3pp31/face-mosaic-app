@@ -17,12 +17,54 @@ export type UseFaceDetectionResult = {
   error: string | null
 }
 
+const TILE_GRID_SIZES = [2, 3]
+
+function createTileRegions(
+  imageWidth: number,
+  imageHeight: number,
+  gridSizes: number[] = TILE_GRID_SIZES,
+): CropRegion[] {
+  const regions: CropRegion[] = []
+
+  for (const gridSize of gridSizes) {
+    const tileWidth = imageWidth / gridSize
+    const tileHeight = imageHeight / gridSize
+
+    for (let row = 0; row < gridSize; row++) {
+      for (let col = 0; col < gridSize; col++) {
+        const x = Math.round(col * tileWidth)
+        const y = Math.round(row * tileHeight)
+        const nextX = Math.round((col + 1) * tileWidth)
+        const nextY = Math.round((row + 1) * tileHeight)
+
+        regions.push({
+          x,
+          y,
+          width: nextX - x,
+          height: nextY - y,
+        })
+      }
+    }
+  }
+
+  return regions
+}
+
+function translateBoxesToOriginal(
+  boxes: FaceBox[],
+  region: CropRegion,
+): FaceBox[] {
+  return boxes.map((box) => ({
+    x1: box.x1 + region.x,
+    y1: box.y1 + region.y,
+    x2: box.x2 + region.x,
+    y2: box.y2 + region.y,
+    score: box.score,
+  }))
+}
+
 /**
  * 顔検出カスタムフック
- *
- * - isModelLoading: モデルのロード中（初回セッション取得時）
- * - isProcessing: 推論処理中
- * - error: エラーメッセージ（エラーがなければ null）
  */
 export function useFaceDetection(): UseFaceDetectionResult {
   const [isModelLoading, setIsModelLoading] = useState(false)
@@ -57,19 +99,22 @@ export function useFaceDetection(): UseFaceDetectionResult {
         const prep = preprocessImageToTensor(image)
         const output = await runFaceDetection(session, prep.tensor, options)
 
-        const selectedBoxes = output['selectedBoxes']
-        if (!selectedBoxes) {
-          throw new Error('モデルの出力に selectedBoxes が含まれていません')
+          const localFaces = postprocessDetections(
+            selectedBoxes.data as Float32Array,
+            prep.cropRegion.width,
+            prep.cropRegion.height,
+          )
+          const translated = translateBoxesToOriginal(localFaces, prep.cropRegion)
+          allFaces.push(...translated)
         }
 
-        const boxesData = selectedBoxes.data as Float32Array
-        const faces = postprocessDetections(
-          boxesData,
-          prep.originalWidth,
-          prep.originalHeight,
+        const normalizedFaces = postprocessDetections(
+          allFaces,
+          fullImagePrep.originalWidth,
+          fullImagePrep.originalHeight,
         )
 
-        return faces
+        return deduplicateFaceBoxes(normalizedFaces)
       } catch (err) {
         const message =
           err instanceof Error ? err.message : '顔検出の処理に失敗しました'

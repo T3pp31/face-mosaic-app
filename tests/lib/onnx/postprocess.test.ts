@@ -287,4 +287,29 @@ describe('postprocessDetections', () => {
     // Then
     expect(results).toHaveLength(0)
   })
+
+
+  it('TC15: 複数小顔ケースで座標変換済み FaceBox[] の件数が維持される', () => {
+    // Given: 全体縮小推論では 1 件だったとみなす
+    const fullScaleFaces: FaceBox[] = [
+      { x1: 10, y1: 10, x2: 20, y2: 20, score: 1.0 },
+    ]
+
+    // Given: タイル推論を合成した座標変換済みボックス（小顔3件）
+    const tiledFaces: FaceBox[] = [
+      { x1: 10, y1: 10, x2: 20, y2: 20, score: 1.0 },
+      { x1: 30, y1: 12, x2: 40, y2: 22, score: 1.0 },
+      { x1: 50, y1: 14, x2: 60, y2: 24, score: 1.0 },
+    ]
+
+    // When
+    const fullResults = postprocessDetections(fullScaleFaces, 100, 100)
+    const tiledResults = postprocessDetections(tiledFaces, 100, 100)
+
+    // Then: タイル合成後の件数が増える
+    expect(fullResults).toHaveLength(1)
+    expect(tiledResults).toHaveLength(3)
+    expect(tiledResults.length).toBeGreaterThan(fullResults.length)
+  })
+
 })
