@@ -15,11 +15,11 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 // | 8 | 異常系: InferenceSession.create 失敗    | create が reject する               | エラーが伝播する                              |
 // | 9 | 異常系: session.run 失敗               | session.run が reject する          | エラーが伝播する                              |
 // |10 | feeds に 4 つのキーが含まれる          | runFaceDetection 実行               | feeds のキー数が 4                            |
+// |11 | 動的閾値の反映                          | options で閾値/件数を指定            | feeds の値が options と一致                    |
 // ---------------------------------------------------------------------------
 
 // onnxruntime-web を完全 mock する
 vi.mock('onnxruntime-web', () => {
-  const mockRun = vi.fn()
   const mockCreate = vi.fn()
 
   class MockTensor {
@@ -269,5 +269,36 @@ describe('runFaceDetection', () => {
         inputTensor as unknown as import('onnxruntime-web').Tensor,
       ),
     ).rejects.toThrow('Inference failed')
+  })
+
+  it('TC11: options で指定した動的閾値が feeds に反映される', async () => {
+    // Given
+    const { runFaceDetection, mockSession, mockRun, ort } = await setupMocks()
+    const inputTensor = new ort.Tensor(
+      'float32',
+      new Float32Array(1 * 3 * 128 * 128),
+      [1, 3, 128, 128],
+    )
+    const dynamicOptions = {
+      confThreshold: 0.2,
+      iouThreshold: 0.6,
+      maxDetections: 40,
+    }
+
+    // When
+    await runFaceDetection(
+      mockSession as unknown as import('onnxruntime-web').InferenceSession,
+      inputTensor as unknown as import('onnxruntime-web').Tensor,
+      dynamicOptions,
+    )
+
+    // Then
+    const feeds = mockRun.mock.calls[0][0] as Record<
+      string,
+      { data: Float32Array | BigInt64Array }
+    >
+    expect((feeds['conf_threshold'].data as Float32Array)[0]).toBeCloseTo(0.2)
+    expect((feeds['iou_threshold'].data as Float32Array)[0]).toBeCloseTo(0.6)
+    expect((feeds['max_detections'].data as BigInt64Array)[0]).toBe(BigInt(40))
   })
 })

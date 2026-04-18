@@ -7,6 +7,12 @@ import {
   MAX_DETECTIONS,
 } from '@/config/constants'
 
+export type FaceDetectionRuntimeOptions = {
+  confThreshold?: number
+  iouThreshold?: number
+  maxDetections?: number
+}
+
 // jsDelivr CDN から WASM バイナリを読み込む
 ort.env.wasm.wasmPaths =
   'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.24.3/dist/'
@@ -41,22 +47,29 @@ export async function getFaceSession(): Promise<ort.InferenceSession> {
 export async function runFaceDetection(
   session: ort.InferenceSession,
   tensor: ort.Tensor,
+  options: FaceDetectionRuntimeOptions = {},
 ): Promise<ort.InferenceSession.OnnxValueMapType> {
+  const {
+    confThreshold = CONF_THRESHOLD,
+    iouThreshold = IOU_THRESHOLD,
+    maxDetections = MAX_DETECTIONS,
+  } = options
+
   const confThresholdTensor = new ort.Tensor(
     'float32',
-    Float32Array.from([CONF_THRESHOLD]),
+    Float32Array.from([confThreshold]),
     [1],
   )
 
   const iouThresholdTensor = new ort.Tensor(
     'float32',
-    Float32Array.from([IOU_THRESHOLD]),
+    Float32Array.from([iouThreshold]),
     [1],
   )
 
   const maxDetectionsTensor = new ort.Tensor(
     'int64',
-    BigInt64Array.from([BigInt(MAX_DETECTIONS)]),
+    BigInt64Array.from([BigInt(maxDetections)]),
     [1],
   )
 

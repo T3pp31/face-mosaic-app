@@ -3,7 +3,22 @@ import { ImageUploader } from '@/components/ImageUploader'
 import { MosaicCanvas } from '@/components/MosaicCanvas'
 import { useFaceDetection } from '@/hooks/useFaceDetection'
 import { drawImageWithMosaic } from '@/lib/mosaic/mosaicCanvas'
-import { BBOX_PADDING_RATIO, MOSAIC_SCALE } from '@/config/constants'
+import {
+  BBOX_PADDING_RATIO,
+  MOSAIC_SCALE,
+  CONF_THRESHOLD,
+  IOU_THRESHOLD,
+  MAX_DETECTIONS,
+  CONF_THRESHOLD_MIN,
+  CONF_THRESHOLD_MAX,
+  CONF_THRESHOLD_STEP,
+  IOU_THRESHOLD_MIN,
+  IOU_THRESHOLD_MAX,
+  IOU_THRESHOLD_STEP,
+  MAX_DETECTIONS_MIN,
+  MAX_DETECTIONS_MAX,
+  MAX_DETECTIONS_STEP,
+} from '@/config/constants'
 
 /**
  * 顔モザイクのメインコンポーネント
@@ -17,6 +32,9 @@ export function ImageFaceMosaic() {
   const [hasResult, setHasResult] = useState(false)
   const [paddingRatio, setPaddingRatio] = useState(BBOX_PADDING_RATIO)
   const [mosaicScale, setMosaicScale] = useState(MOSAIC_SCALE)
+  const [confThreshold, setConfThreshold] = useState(CONF_THRESHOLD)
+  const [iouThreshold, setIouThreshold] = useState(IOU_THRESHOLD)
+  const [maxDetections, setMaxDetections] = useState(MAX_DETECTIONS)
 
   const { detectFaces, isModelLoading, isProcessing, error } =
     useFaceDetection()
@@ -30,7 +48,11 @@ export function ImageFaceMosaic() {
 
     try {
       const image = await loadImage(objectUrl)
-      const faces = await detectFaces(image)
+      const faces = await detectFaces(image, {
+        confThreshold,
+        iouThreshold,
+        maxDetections,
+      })
 
       if (canvasRef.current) {
         drawImageWithMosaic(
@@ -52,6 +74,50 @@ export function ImageFaceMosaic() {
       <ImageUploader onFileSelect={handleFileSelect} disabled={isLoading} />
 
       <div className="mosaic-controls" aria-label="モザイク調整">
+        <label className="mosaic-controls__item" htmlFor="conf-threshold">
+          <span>検出信頼度しきい値: {confThreshold.toFixed(2)}</span>
+          <input
+            id="conf-threshold"
+            type="range"
+            min={CONF_THRESHOLD_MIN}
+            max={CONF_THRESHOLD_MAX}
+            step={CONF_THRESHOLD_STEP}
+            value={confThreshold}
+            onChange={(event) => setConfThreshold(Number(event.target.value))}
+          />
+        </label>
+
+        <label className="mosaic-controls__item" htmlFor="iou-threshold">
+          <span>重複除去しきい値 (IoU): {iouThreshold.toFixed(2)}</span>
+          <input
+            id="iou-threshold"
+            type="range"
+            min={IOU_THRESHOLD_MIN}
+            max={IOU_THRESHOLD_MAX}
+            step={IOU_THRESHOLD_STEP}
+            value={iouThreshold}
+            onChange={(event) => setIouThreshold(Number(event.target.value))}
+          />
+        </label>
+
+        <label className="mosaic-controls__item" htmlFor="max-detections">
+          <span>最大検出数: {maxDetections}</span>
+          <input
+            id="max-detections"
+            type="range"
+            min={MAX_DETECTIONS_MIN}
+            max={MAX_DETECTIONS_MAX}
+            step={MAX_DETECTIONS_STEP}
+            value={maxDetections}
+            onChange={(event) => setMaxDetections(Number(event.target.value))}
+          />
+        </label>
+
+        <p className="mosaic-controls__hint">
+          検出が少ない場合は「検出信頼度しきい値」を初期値
+          {CONF_THRESHOLD.toFixed(2)} より下げると、検出数が増える場合があります。
+        </p>
+
         <label className="mosaic-controls__item" htmlFor="padding-ratio">
           <span>顔枠を少し広げる量: {paddingRatio.toFixed(2)}</span>
           <input
