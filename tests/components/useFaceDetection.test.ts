@@ -33,15 +33,17 @@ vi.mock('@/lib/onnx/session', () => ({
 
 vi.mock('@/lib/onnx/preprocess', () => ({
   preprocessImageToTensor: vi.fn(),
+  preprocessImageRegionToTensor: vi.fn(),
 }))
 
 vi.mock('@/lib/onnx/postprocess', () => ({
   postprocessDetections: vi.fn(),
+  deduplicateFaceBoxes: vi.fn(),
 }))
 
 import { getFaceSession, runFaceDetection } from '@/lib/onnx/session'
-import { preprocessImageToTensor } from '@/lib/onnx/preprocess'
-import { postprocessDetections } from '@/lib/onnx/postprocess'
+import { preprocessImageRegionToTensor, preprocessImageToTensor } from '@/lib/onnx/preprocess'
+import { deduplicateFaceBoxes, postprocessDetections } from '@/lib/onnx/postprocess'
 
 // -----------------------------------------------------------------------
 // ヘルパー
@@ -74,6 +76,22 @@ function createMockSelectedBoxes(count: number): Float32Array {
 describe('useFaceDetection', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+
+    vi.mocked(preprocessImageToTensor).mockReturnValue({
+      tensor: createMockTensor(),
+      originalWidth: 640,
+      originalHeight: 480,
+      cropRegion: { x: 0, y: 0, width: 640, height: 480 },
+    })
+
+    vi.mocked(preprocessImageRegionToTensor).mockImplementation((_, region) => ({
+      tensor: createMockTensor(),
+      originalWidth: 640,
+      originalHeight: 480,
+      cropRegion: region,
+    }))
+
+    vi.mocked(deduplicateFaceBoxes).mockImplementation((boxes) => boxes)
   })
 
   // =====================================================================
@@ -93,6 +111,7 @@ describe('useFaceDetection', () => {
         tensor,
         originalWidth: 640,
         originalHeight: 480,
+        cropRegion: { x: 0, y: 0, width: 640, height: 480 },
       })
       vi.mocked(runFaceDetection).mockResolvedValue({
         selectedBoxes: {
@@ -130,6 +149,7 @@ describe('useFaceDetection', () => {
         tensor,
         originalWidth: 100,
         originalHeight: 100,
+        cropRegion: { x: 0, y: 0, width: 100, height: 100 },
       })
       vi.mocked(runFaceDetection).mockResolvedValue({
         selectedBoxes: {
@@ -153,6 +173,58 @@ describe('useFaceDetection', () => {
       expect(result.current.error).toBeNull()
     })
 
+
+    it('TC-12: 複数タイル推論で小顔の検出数が増える', async () => {
+      // Given
+      const session = createMockSession()
+      const tensor = createMockTensor()
+      const boxes = createMockSelectedBoxes(1)
+
+      vi.mocked(getFaceSession).mockResolvedValue(session)
+      vi.mocked(preprocessImageToTensor).mockReturnValue({
+        tensor,
+        originalWidth: 300,
+        originalHeight: 300,
+        cropRegion: { x: 0, y: 0, width: 300, height: 300 },
+      })
+      vi.mocked(preprocessImageRegionToTensor).mockImplementation((_, region) => ({
+        tensor,
+        originalWidth: 300,
+        originalHeight: 300,
+        cropRegion: region,
+      }))
+      vi.mocked(runFaceDetection).mockResolvedValue({
+        selectedBoxes: {
+          data: boxes,
+          dims: [1, 1, 16],
+          type: 'float32',
+        } as unknown as ort.Tensor,
+      })
+
+      let localCallCount = 0
+      vi.mocked(postprocessDetections).mockImplementation((detections) => {
+        if (detections instanceof Float32Array) {
+          localCallCount += 1
+          return [{ x1: 5 * localCallCount, y1: 5, x2: 15 + 5 * localCallCount, y2: 15, score: 1.0 }]
+        }
+
+        return detections
+      })
+      vi.mocked(deduplicateFaceBoxes).mockImplementation((faceBoxes) => faceBoxes)
+
+      const { result } = renderHook(() => useFaceDetection())
+
+      // When
+      let faces: ReturnType<typeof postprocessDetections> = []
+      await act(async () => {
+        faces = await result.current.detectFaces(createMockImage())
+      })
+
+      // Then: 全体推論(1) + タイル推論(13) で件数が増える
+      expect(faces.length).toBe(14)
+      expect(faces.length).toBeGreaterThan(1)
+    })
+
     it('TC-03: 2回目の呼び出しでも正常に動作する', async () => {
       // Given
       const session = createMockSession()
@@ -165,6 +237,7 @@ describe('useFaceDetection', () => {
         tensor,
         originalWidth: 640,
         originalHeight: 480,
+        cropRegion: { x: 0, y: 0, width: 640, height: 480 },
       })
       vi.mocked(runFaceDetection).mockResolvedValue({
         selectedBoxes: {
@@ -200,6 +273,7 @@ describe('useFaceDetection', () => {
         tensor: createMockTensor(),
         originalWidth: 100,
         originalHeight: 100,
+        cropRegion: { x: 0, y: 0, width: 100, height: 100 },
       })
       vi.mocked(runFaceDetection).mockResolvedValue({
         selectedBoxes: {
@@ -228,6 +302,7 @@ describe('useFaceDetection', () => {
         tensor: createMockTensor(),
         originalWidth: 100,
         originalHeight: 100,
+        cropRegion: { x: 0, y: 0, width: 100, height: 100 },
       })
       vi.mocked(runFaceDetection).mockResolvedValue({
         selectedBoxes: {
@@ -283,6 +358,7 @@ describe('useFaceDetection', () => {
         tensor: createMockTensor(),
         originalWidth: 100,
         originalHeight: 100,
+        cropRegion: { x: 0, y: 0, width: 100, height: 100 },
       })
       vi.mocked(runFaceDetection).mockRejectedValue(
         new Error('推論に失敗しました'),
@@ -309,6 +385,7 @@ describe('useFaceDetection', () => {
         tensor: createMockTensor(),
         originalWidth: 100,
         originalHeight: 100,
+        cropRegion: { x: 0, y: 0, width: 100, height: 100 },
       })
       // selectedBoxes を含まない出力
       vi.mocked(runFaceDetection).mockResolvedValue({})
@@ -356,6 +433,7 @@ describe('useFaceDetection', () => {
         tensor: createMockTensor(),
         originalWidth: 100,
         originalHeight: 100,
+        cropRegion: { x: 0, y: 0, width: 100, height: 100 },
       })
       vi.mocked(runFaceDetection).mockRejectedValue(42)
 
@@ -382,6 +460,7 @@ describe('useFaceDetection', () => {
         tensor: createMockTensor(),
         originalWidth: 100,
         originalHeight: 100,
+        cropRegion: { x: 0, y: 0, width: 100, height: 100 },
       })
       vi.mocked(runFaceDetection).mockResolvedValue({
         selectedBoxes: {
