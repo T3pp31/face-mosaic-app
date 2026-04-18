@@ -15,6 +15,7 @@
  * | 8 | 異常系     | 出力に selectedBoxes がない             | error がセット、[] が返る            |
  * | 9 | 境界値     | getFaceSession が非 Error をスロー       | fallback エラーメッセージがセット     |
  * |10 | 境界値     | runFaceDetection が非 Error をスロー     | fallback エラーメッセージがセット     |
+ * |11 | 正常系     | confThreshold を下げて実行               | 複数検出が返り、options が渡される     |
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
@@ -247,6 +248,50 @@ describe('useFaceDetection', () => {
 
       // Then
       expect(result.current.isProcessing).toBe(false)
+    })
+
+    it('TC-11: 低い confThreshold を渡すと複数検出シナリオを扱える', async () => {
+      // Given
+      const session = createMockSession()
+      const tensor = createMockTensor()
+      const boxes = createMockSelectedBoxes(2)
+      const runtimeOptions = {
+        confThreshold: 0.2,
+        iouThreshold: 0.3,
+        maxDetections: 25,
+      }
+      const expectedFaces = [
+        { x1: 10, y1: 20, x2: 80, y2: 90, score: 0.6 },
+        { x1: 120, y1: 50, x2: 200, y2: 140, score: 0.52 },
+      ]
+
+      vi.mocked(getFaceSession).mockResolvedValue(session)
+      vi.mocked(preprocessImageToTensor).mockReturnValue({
+        tensor,
+        originalWidth: 640,
+        originalHeight: 480,
+      })
+      vi.mocked(runFaceDetection).mockResolvedValue({
+        selectedBoxes: {
+          data: boxes,
+          dims: [1, 2, 16],
+          type: 'float32',
+        } as unknown as ort.Tensor,
+      })
+      vi.mocked(postprocessDetections).mockReturnValue(expectedFaces)
+
+      const { result } = renderHook(() => useFaceDetection())
+
+      // When
+      let faces: typeof expectedFaces = []
+      await act(async () => {
+        faces = await result.current.detectFaces(createMockImage(), runtimeOptions)
+      })
+
+      // Then
+      expect(faces).toEqual(expectedFaces)
+      expect(runFaceDetection).toHaveBeenCalledWith(session, tensor, runtimeOptions)
+      expect(faces).toHaveLength(2)
     })
   })
 

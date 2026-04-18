@@ -1,10 +1,17 @@
 import { useState, useCallback } from 'react'
-import { getFaceSession, runFaceDetection } from '@/lib/onnx/session'
+import {
+  getFaceSession,
+  runFaceDetection,
+  type FaceDetectionRuntimeOptions,
+} from '@/lib/onnx/session'
 import { preprocessImageToTensor } from '@/lib/onnx/preprocess'
 import { postprocessDetections, type FaceBox } from '@/lib/onnx/postprocess'
 
 export type UseFaceDetectionResult = {
-  detectFaces: (image: HTMLImageElement) => Promise<FaceBox[]>
+  detectFaces: (
+    image: HTMLImageElement,
+    options?: FaceDetectionRuntimeOptions,
+  ) => Promise<FaceBox[]>
   isModelLoading: boolean
   isProcessing: boolean
   error: string | null
@@ -23,7 +30,10 @@ export function useFaceDetection(): UseFaceDetectionResult {
   const [error, setError] = useState<string | null>(null)
 
   const detectFaces = useCallback(
-    async (image: HTMLImageElement): Promise<FaceBox[]> => {
+    async (
+      image: HTMLImageElement,
+      options?: FaceDetectionRuntimeOptions,
+    ): Promise<FaceBox[]> => {
       setError(null)
       setIsModelLoading(true)
 
@@ -45,7 +55,7 @@ export function useFaceDetection(): UseFaceDetectionResult {
 
       try {
         const prep = preprocessImageToTensor(image)
-        const output = await runFaceDetection(session, prep.tensor)
+        const output = await runFaceDetection(session, prep.tensor, options)
 
         const selectedBoxes = output['selectedBoxes']
         if (!selectedBoxes) {

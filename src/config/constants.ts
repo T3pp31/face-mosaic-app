@@ -11,6 +11,21 @@ export const IOU_THRESHOLD = 0.3
 export const MAX_DETECTIONS = 25
 
 /**
+ * Runtime adjustable detection parameter UI bounds
+ */
+export const CONF_THRESHOLD_MIN = 0.1
+export const CONF_THRESHOLD_MAX = 0.9
+export const CONF_THRESHOLD_STEP = 0.05
+
+export const IOU_THRESHOLD_MIN = 0.1
+export const IOU_THRESHOLD_MAX = 0.9
+export const IOU_THRESHOLD_STEP = 0.05
+
+export const MAX_DETECTIONS_MIN = 1
+export const MAX_DETECTIONS_MAX = 50
+export const MAX_DETECTIONS_STEP = 1
+
+/**
  * Mosaic rendering configuration
  */
 export const MOSAIC_SCALE = 0.03
