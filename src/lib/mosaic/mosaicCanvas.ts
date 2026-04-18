@@ -62,8 +62,8 @@ function applyPixelMosaic(
  * @param canvas        描画先 HTMLCanvasElement
  * @param image         元画像（HTMLImageElement または HTMLVideoElement）
  * @param faces         検出された顔のバウンディングボックス配列
- * @param mosaicScale   モザイクの粗さ（デフォルト: MOSAIC_SCALE = 0.08）
- * @param paddingRatio  bbox 拡張率（デフォルト: BBOX_PADDING_RATIO = 0.15）
+ * @param mosaicScale   モザイクの粗さ（デフォルト: MOSAIC_SCALE = 0.03）
+ * @param paddingRatio  bbox 拡張率（デフォルト: BBOX_PADDING_RATIO = 0.10）
  */
 export function drawImageWithMosaic(
   canvas: HTMLCanvasElement,

@@ -70,7 +70,7 @@ export function ImageFaceMosaic() {
           <input
             id="mosaic-scale"
             type="range"
-            min={0.02}
+            min={0.01}
             max={0.2}
             step={0.01}
             value={mosaicScale}
