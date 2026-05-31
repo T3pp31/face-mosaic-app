@@ -30,6 +30,8 @@ function makeImageMock(width: number, height: number): HTMLImageElement {
   const img = document.createElement('img')
   Object.defineProperty(img, 'width', { value: width, configurable: true })
   Object.defineProperty(img, 'height', { value: height, configurable: true })
+  Object.defineProperty(img, 'naturalWidth', { value: width, configurable: true })
+  Object.defineProperty(img, 'naturalHeight', { value: height, configurable: true })
   return img
 }
 
