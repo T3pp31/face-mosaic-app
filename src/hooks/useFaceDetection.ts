@@ -4,8 +4,17 @@ import {
   runFaceDetection,
   type FaceDetectionRuntimeOptions,
 } from '@/lib/onnx/session'
-import { preprocessImageToTensor } from '@/lib/onnx/preprocess'
-import { postprocessDetections, type FaceBox } from '@/lib/onnx/postprocess'
+import {
+  preprocessImageRegionToTensor,
+  preprocessImageToTensor,
+  type CropRegion,
+} from '@/lib/onnx/preprocess'
+import { SMALL_FACE_TILE_THRESHOLD } from '@/config/constants'
+import {
+  deduplicateFaceBoxes,
+  postprocessDetections,
+  type FaceBox,
+} from '@/lib/onnx/postprocess'
 
 export type UseFaceDetectionResult = {
   detectFaces: (
@@ -96,16 +105,62 @@ export function useFaceDetection(): UseFaceDetectionResult {
       setIsProcessing(true)
 
       try {
-        const prep = preprocessImageToTensor(image)
-        const output = await runFaceDetection(session, prep.tensor, options)
+        const fullImagePrep = preprocessImageToTensor(image)
+        const allFaces: FaceBox[] = []
 
-          const localFaces = postprocessDetections(
-            selectedBoxes.data as Float32Array,
-            prep.cropRegion.width,
-            prep.cropRegion.height,
+        const fullOutput = await runFaceDetection(
+          session,
+          fullImagePrep.tensor,
+          options,
+        )
+        const fullSelectedBoxes = fullOutput['selectedBoxes']
+        if (!fullSelectedBoxes) {
+          throw new Error('モデルの出力に selectedBoxes が含まれていません')
+        }
+
+        const fullLocalFaces = postprocessDetections(
+          fullSelectedBoxes.data as Float32Array,
+          fullImagePrep.cropRegion.width,
+          fullImagePrep.cropRegion.height,
+        )
+        allFaces.push(
+          ...translateBoxesToOriginal(fullLocalFaces, fullImagePrep.cropRegion),
+        )
+
+        const shouldUseTiles =
+          allFaces.length === 0 ||
+          allFaces.every(
+            (face) =>
+              face.x2 - face.x1 < SMALL_FACE_TILE_THRESHOLD &&
+              face.y2 - face.y1 < SMALL_FACE_TILE_THRESHOLD,
           )
-          const translated = translateBoxesToOriginal(localFaces, prep.cropRegion)
-          allFaces.push(...translated)
+
+        if (shouldUseTiles) {
+          const tileRegions = createTileRegions(
+            fullImagePrep.originalWidth,
+            fullImagePrep.originalHeight,
+          )
+
+          for (const region of tileRegions) {
+            const prep = preprocessImageRegionToTensor(image, region)
+            const output = await runFaceDetection(session, prep.tensor, options)
+            const selectedBoxes = output['selectedBoxes']
+            if (!selectedBoxes) {
+              throw new Error('モデルの出力に selectedBoxes が含まれていません')
+            }
+
+            const localFaces = postprocessDetections(
+              selectedBoxes.data as Float32Array,
+              prep.cropRegion.width,
+              prep.cropRegion.height,
+            )
+            const translated = translateBoxesToOriginal(
+              localFaces,
+              prep.cropRegion,
+            )
+
+            allFaces.push(...translated)
+          }
         }
 
         const normalizedFaces = postprocessDetections(
@@ -114,7 +169,12 @@ export function useFaceDetection(): UseFaceDetectionResult {
           fullImagePrep.originalHeight,
         )
 
-        return deduplicateFaceBoxes(normalizedFaces)
+        const deduped = deduplicateFaceBoxes(
+          normalizedFaces,
+          options?.iouThreshold,
+        )
+
+        return deduped
       } catch (err) {
         const message =
           err instanceof Error ? err.message : '顔検出の処理に失敗しました'

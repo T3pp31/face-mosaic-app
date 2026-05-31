@@ -1,12 +1,18 @@
 import type { FaceBox } from '@/lib/onnx/postprocess'
-import { MOSAIC_SCALE, BBOX_PADDING_RATIO } from '@/config/constants'
+import {
+  MOSAIC_SCALE,
+  BBOX_PADDING_RATIO,
+  BBOX_PADDING_TOP_MULTIPLIER,
+} from '@/config/constants'
 
 /**
  * 画像のピクセル幅を返す
  * HTMLVideoElement の場合は videoWidth を使用する
  */
 function getSourceWidth(image: HTMLImageElement | HTMLVideoElement): number {
-  return image instanceof HTMLVideoElement ? image.videoWidth : image.width
+  return image instanceof HTMLVideoElement
+    ? image.videoWidth
+    : image.naturalWidth
 }
 
 /**
@@ -14,7 +20,9 @@ function getSourceWidth(image: HTMLImageElement | HTMLVideoElement): number {
  * HTMLVideoElement の場合は videoHeight を使用する
  */
 function getSourceHeight(image: HTMLImageElement | HTMLVideoElement): number {
-  return image instanceof HTMLVideoElement ? image.videoHeight : image.height
+  return image instanceof HTMLVideoElement
+    ? image.videoHeight
+    : image.naturalHeight
 }
 
 /**
@@ -63,7 +71,7 @@ function applyPixelMosaic(
  * @param image         元画像（HTMLImageElement または HTMLVideoElement）
  * @param faces         検出された顔のバウンディングボックス配列
  * @param mosaicScale   モザイクの粗さ（デフォルト: MOSAIC_SCALE = 0.03）
- * @param paddingRatio  bbox 拡張率（デフォルト: BBOX_PADDING_RATIO = 0.10）
+ * @param paddingRatio  bbox 拡張率（デフォルト: BBOX_PADDING_RATIO = 0.15）
  */
 export function drawImageWithMosaic(
   canvas: HTMLCanvasElement,
@@ -91,15 +99,16 @@ export function drawImageWithMosaic(
     const bboxH = face.y2 - face.y1
 
     const padX = bboxW * paddingRatio
-    const padY = bboxH * paddingRatio
+    const padTop = bboxH * paddingRatio * BBOX_PADDING_TOP_MULTIPLIER
+    const padBottom = bboxH * paddingRatio
 
     // padding 拡張後の左上座標（canvas 境界でクリップ）
     const x = Math.max(0, Math.floor(face.x1 - padX))
-    const y = Math.max(0, Math.floor(face.y1 - padY))
+    const y = Math.max(0, Math.floor(face.y1 - padTop))
 
     // padding 拡張後の右下座標（canvas 境界でクリップ）
     const x2Clipped = Math.min(width, Math.ceil(face.x2 + padX))
-    const y2Clipped = Math.min(height, Math.ceil(face.y2 + padY))
+    const y2Clipped = Math.min(height, Math.ceil(face.y2 + padBottom))
 
     const w = x2Clipped - x
     const h = y2Clipped - y

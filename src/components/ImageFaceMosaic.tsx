@@ -1,8 +1,10 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 import { ImageUploader } from '@/components/ImageUploader'
 import { MosaicCanvas } from '@/components/MosaicCanvas'
 import { useFaceDetection } from '@/hooks/useFaceDetection'
 import { drawImageWithMosaic } from '@/lib/mosaic/mosaicCanvas'
+import { loadImageFromFile } from '@/lib/image/loadImageFromFile'
+import type { FaceBox } from '@/lib/onnx/postprocess'
 import {
   BBOX_PADDING_RATIO,
   MOSAIC_SCALE,
@@ -20,6 +22,11 @@ import {
   MAX_DETECTIONS_STEP,
 } from '@/config/constants'
 
+type ProcessedImage = {
+  image: HTMLImageElement
+  faces: FaceBox[]
+}
+
 /**
  * 顔モザイクのメインコンポーネント
  *
@@ -29,6 +36,7 @@ import {
  */
 export function ImageFaceMosaic() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
+  const processedRef = useRef<ProcessedImage | null>(null)
   const [hasResult, setHasResult] = useState(false)
   const [paddingRatio, setPaddingRatio] = useState(BBOX_PADDING_RATIO)
   const [mosaicScale, setMosaicScale] = useState(MOSAIC_SCALE)
@@ -41,31 +49,55 @@ export function ImageFaceMosaic() {
 
   const isLoading = isModelLoading || isProcessing
 
+  const applyMosaic = useCallback(
+    (
+      image: HTMLImageElement,
+      faces: FaceBox[],
+      nextMosaicScale: number,
+      nextPaddingRatio: number,
+    ) => {
+      if (canvasRef.current === null) {
+        return
+      }
+
+      drawImageWithMosaic(
+        canvasRef.current,
+        image,
+        faces,
+        nextMosaicScale,
+        nextPaddingRatio,
+      )
+      setHasResult(true)
+    },
+    [],
+  )
+
+  useEffect(() => {
+    const processed = processedRef.current
+    if (processed === null || isLoading) {
+      return
+    }
+
+    applyMosaic(processed.image, processed.faces, mosaicScale, paddingRatio)
+  }, [applyMosaic, isLoading, mosaicScale, paddingRatio])
+
   async function handleFileSelect(file: File) {
     setHasResult(false)
-
-    const objectUrl = URL.createObjectURL(file)
+    processedRef.current = null
 
     try {
-      const image = await loadImage(objectUrl)
+      const image = await loadImageFromFile(file)
       const faces = await detectFaces(image, {
         confThreshold,
         iouThreshold,
         maxDetections,
       })
 
-      if (canvasRef.current) {
-        drawImageWithMosaic(
-          canvasRef.current,
-          image,
-          faces,
-          mosaicScale,
-          paddingRatio,
-        )
-        setHasResult(true)
-      }
-    } finally {
-      URL.revokeObjectURL(objectUrl)
+      processedRef.current = { image, faces }
+      applyMosaic(image, faces, mosaicScale, paddingRatio)
+    } catch {
+      processedRef.current = null
+      setHasResult(false)
     }
   }
 
@@ -168,16 +200,4 @@ export function ImageFaceMosaic() {
       <MosaicCanvas canvasRef={canvasRef} hasResult={hasResult} />
     </div>
   )
-}
-
-/**
- * URL から HTMLImageElement を生成して返す
- */
-function loadImage(src: string): Promise<HTMLImageElement> {
-  return new Promise((resolve, reject) => {
-    const img = new Image()
-    img.onload = () => resolve(img)
-    img.onerror = () => reject(new Error('画像の読み込みに失敗しました'))
-    img.src = src
-  })
 }

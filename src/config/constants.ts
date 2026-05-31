@@ -29,7 +29,16 @@ export const MAX_DETECTIONS_STEP = 1
  * Mosaic rendering configuration
  */
 export const MOSAIC_SCALE = 0.03
-export const BBOX_PADDING_RATIO = 0.1
+export const BBOX_PADDING_RATIO = 0.15
+
+/** 額・髪の毛方向に追加する上部パディング倍率 */
+export const BBOX_PADDING_TOP_MULTIPLIER = 1.5
+
+/**
+ * タイル推論を行う顔サイズ上限 (px)。
+ * この値以上の顔が全体推論で検出された場合、タイル推論はスキップする。
+ */
+export const SMALL_FACE_TILE_THRESHOLD = 30
 
 /**
  * Minimum face size in pixels to filter out noise detections

@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { drawImageWithMosaic } from '@/lib/mosaic/mosaicCanvas'
 import type { FaceBox } from '@/lib/onnx/postprocess'
-import { MOSAIC_SCALE, BBOX_PADDING_RATIO } from '@/config/constants'
+import { MOSAIC_SCALE, BBOX_PADDING_RATIO, BBOX_PADDING_TOP_MULTIPLIER } from '@/config/constants'
 
 // -----------------------------------------------------------------------
 // テスト用ヘルパー
@@ -12,6 +12,8 @@ function createMockImage(width = 640, height = 480): HTMLImageElement {
   const img = document.createElement('img')
   Object.defineProperty(img, 'width', { value: width, configurable: true })
   Object.defineProperty(img, 'height', { value: height, configurable: true })
+  Object.defineProperty(img, 'naturalWidth', { value: width, configurable: true })
+  Object.defineProperty(img, 'naturalHeight', { value: height, configurable: true })
   return img
 }
 
@@ -189,8 +191,7 @@ describe('drawImageWithMosaic', () => {
       // Given: 640×480 の画像と顔 bbox 1件
       // bbox: x1=100, y1=100, x2=200, y2=200 → bboxW=100, bboxH=100
       // paddingRatio=BBOX_PADDING_RATIO（既定値）を使って領域を拡張
-      // expandSize = 100 + 100 * BBOX_PADDING_RATIO * 2
-      // smallW = max(1, floor(expandSize * MOSAIC_SCALE))
+      // w = bboxW + 2 * padX, h = bboxH + padTop + padBottom
       const image = createMockImage(640, 480)
       const canvas = document.createElement('canvas')
       setupCanvasMocks(canvas)
@@ -199,11 +200,13 @@ describe('drawImageWithMosaic', () => {
       // When: mosaicScale/paddingRatio を指定しない（デフォルト使用）
       drawImageWithMosaic(canvas, image, faces)
 
-      // Then: 一時 canvas のサイズが期待通り (document.createElement のモックで設定された)
-      // 検証は mainCtx.drawImage の第4引数 (smallW) と第5引数 (smallH) で確認
-      const expandedSize = 100 + 100 * BBOX_PADDING_RATIO * 2
-      const expectedSmallW = Math.max(1, Math.floor(expandedSize * MOSAIC_SCALE))
-      const expectedSmallH = Math.max(1, Math.floor(expandedSize * MOSAIC_SCALE))
+      const padX = 100 * BBOX_PADDING_RATIO
+      const padTop = 100 * BBOX_PADDING_RATIO * BBOX_PADDING_TOP_MULTIPLIER
+      const padBottom = 100 * BBOX_PADDING_RATIO
+      const expectedW = 100 + padX * 2
+      const expectedH = 100 + padTop + padBottom
+      const expectedSmallW = Math.max(1, Math.floor(expectedW * MOSAIC_SCALE))
+      const expectedSmallH = Math.max(1, Math.floor(expectedH * MOSAIC_SCALE))
       // ctx.drawImage(temp, 0, 0, smallW, smallH, x, y, w, h) の smallW/smallH を確認
       const drawImageCalls = (canvas.getContext('2d') as unknown as { drawImage: ReturnType<typeof vi.fn> })
         ?.drawImage?.mock.calls ?? []
@@ -278,9 +281,9 @@ describe('drawImageWithMosaic', () => {
       expect(enlargeCalls[0][7]).toBe(152) // w = 152
     })
 
-    it('TC-08: y1 < padY — y 座標が 0 にクリップされる', () => {
-      // Given: y1=2, bboxH=100, paddingRatio=0.5 → padY=50
-      // y = max(0, floor(2-50)) = 0
+    it('TC-08: y1 < padTop — y 座標が 0 にクリップされる', () => {
+      // Given: y1=2, bboxH=100, paddingRatio=0.5 → padTop=75
+      // y = max(0, floor(2-75)) = 0
       const image = createMockImage(640, 480)
       const canvas = document.createElement('canvas')
       const { mainCtx } = setupCanvasMocks(canvas)
@@ -297,10 +300,10 @@ describe('drawImageWithMosaic', () => {
     })
 
     it('TC-09: y2 > height — 高さが canvas 高さにクリップされる', () => {
-      // Given: y1=378, y2=478, bboxH=100, paddingRatio=0.5 → padY=50
-      // y = max(0, floor(378-50)) = 328
+      // Given: y1=378, y2=478, bboxH=100, paddingRatio=0.5 → padTop=75, padBottom=50
+      // y = max(0, floor(378-75)) = 303
       // y2Clipped = min(480, ceil(478+50)) = 480
-      // h = 480 - 328 = 152
+      // h = 480 - 303 = 177
       const image = createMockImage(640, 480)
       const canvas = document.createElement('canvas')
       const { mainCtx } = setupCanvasMocks(canvas)
@@ -313,7 +316,7 @@ describe('drawImageWithMosaic', () => {
       const enlargeCalls = mainCtx.drawImage.mock.calls.filter(
         (call: unknown[]) => call[0] !== image,
       )
-      expect(enlargeCalls[0][8]).toBe(152) // h = 152
+      expect(enlargeCalls[0][8]).toBe(177) // h = 177
     })
 
     it('TC-10: w = 0 になる bbox — applyPixelMosaic がスキップされる', () => {

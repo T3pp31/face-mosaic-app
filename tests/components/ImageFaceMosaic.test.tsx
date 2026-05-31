@@ -30,8 +30,13 @@ vi.mock('@/lib/mosaic/mosaicCanvas', () => ({
   drawImageWithMosaic: vi.fn(),
 }))
 
+vi.mock('@/lib/image/loadImageFromFile', () => ({
+  loadImageFromFile: vi.fn(),
+}))
+
 import { useFaceDetection } from '@/hooks/useFaceDetection'
 import { drawImageWithMosaic } from '@/lib/mosaic/mosaicCanvas'
+import { loadImageFromFile } from '@/lib/image/loadImageFromFile'
 import type { FaceBox } from '@/lib/onnx/postprocess'
 import { BBOX_PADDING_RATIO, MOSAIC_SCALE } from '@/config/constants'
 
@@ -50,8 +55,21 @@ function setupUseFaceDetectionMock(overrides: Partial<ReturnType<typeof useFaceD
   return defaults
 }
 
-function createImageFile(name = 'test.jpg'): File {
-  return new File(['dummy'], name, { type: 'image/jpeg' })
+function createMockImage(): HTMLImageElement {
+  const img = document.createElement('img')
+  Object.defineProperty(img, 'width', { value: 100, configurable: true })
+  Object.defineProperty(img, 'height', { value: 100, configurable: true })
+  Object.defineProperty(img, 'naturalWidth', { value: 100, configurable: true })
+  Object.defineProperty(img, 'naturalHeight', { value: 100, configurable: true })
+  return img
+}
+
+function uploadFile(input: HTMLInputElement, file: File) {
+  Object.defineProperty(input, 'files', {
+    value: { 0: file, length: 1, item: (i: number) => (i === 0 ? file : null) },
+    configurable: true,
+  })
+  fireEvent.change(input)
 }
 
 // -----------------------------------------------------------------------
@@ -61,29 +79,7 @@ function createImageFile(name = 'test.jpg'): File {
 describe('ImageFaceMosaic', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    // URL.createObjectURL / revokeObjectURL のモック
-    global.URL.createObjectURL = vi.fn().mockReturnValue('blob:mock-url')
-    global.URL.revokeObjectURL = vi.fn()
-
-    // Image のモック（src セット直後に onload を同期呼び出し）
-    class MockImage {
-      width = 100
-      height = 100
-      onload: (() => void) | null = null
-      onerror: (() => void) | null = null
-      private _src = ''
-
-      get src() {
-        return this._src
-      }
-      set src(value: string) {
-        this._src = value
-        if (this.onload) {
-          this.onload()
-        }
-      }
-    }
-    vi.stubGlobal('Image', MockImage)
+    vi.mocked(loadImageFromFile).mockResolvedValue(createMockImage())
   })
 
   // =====================================================================
@@ -108,15 +104,11 @@ describe('ImageFaceMosaic', () => {
       render(<ImageFaceMosaic />)
 
       const input = document.querySelector('input[type="file"]') as HTMLInputElement
-      const file = createImageFile()
+      const file = new File(['dummy'], 'test.jpg', { type: 'image/jpeg' })
 
       // When: fireEvent.change で change イベントを発火
       await act(async () => {
-        Object.defineProperty(input, 'files', {
-          value: { 0: file, length: 1, item: (i: number) => (i === 0 ? file : null) },
-          configurable: true,
-        })
-        fireEvent.change(input)
+        uploadFile(input, file)
       })
 
       // Then
@@ -133,15 +125,11 @@ describe('ImageFaceMosaic', () => {
       render(<ImageFaceMosaic />)
 
       const input = document.querySelector('input[type="file"]') as HTMLInputElement
-      const file = createImageFile()
+      const file = new File(['dummy'], 'test.jpg', { type: 'image/jpeg' })
 
       // When
       await act(async () => {
-        Object.defineProperty(input, 'files', {
-          value: { 0: file, length: 1, item: (i: number) => (i === 0 ? file : null) },
-          configurable: true,
-        })
-        fireEvent.change(input)
+        uploadFile(input, file)
       })
 
       // Then
@@ -163,18 +151,14 @@ describe('ImageFaceMosaic', () => {
       render(<ImageFaceMosaic />)
 
       const input = document.querySelector('input[type="file"]') as HTMLInputElement
-      const file = createImageFile()
+      const file = new File(['dummy'], 'test.jpg', { type: 'image/jpeg' })
       const paddingSlider = screen.getByLabelText(/顔枠を少し広げる量:/) as HTMLInputElement
 
       // When
       fireEvent.change(paddingSlider, { target: { value: '0.12' } })
 
       await act(async () => {
-        Object.defineProperty(input, 'files', {
-          value: { 0: file, length: 1, item: (i: number) => (i === 0 ? file : null) },
-          configurable: true,
-        })
-        fireEvent.change(input)
+        uploadFile(input, file)
       })
 
       // Then
@@ -185,6 +169,43 @@ describe('ImageFaceMosaic', () => {
           [],
           MOSAIC_SCALE,
           0.12,
+        )
+      })
+    })
+
+    it('TC-03c: アップロード後の padding 変更で drawImageWithMosaic が再実行される', async () => {
+      // Given
+      const faces: FaceBox[] = [{ x1: 10, y1: 20, x2: 100, y2: 120, score: 1.0 }]
+      const detectFaces = vi.fn().mockResolvedValue(faces)
+      setupUseFaceDetectionMock({ detectFaces })
+      render(<ImageFaceMosaic />)
+
+      const input = document.querySelector('input[type="file"]') as HTMLInputElement
+      const file = new File(['dummy'], 'test.jpg', { type: 'image/jpeg' })
+      const paddingSlider = screen.getByLabelText(/顔枠を少し広げる量:/) as HTMLInputElement
+
+      await act(async () => {
+        uploadFile(input, file)
+      })
+
+      await waitFor(() => {
+        expect(drawImageWithMosaic).toHaveBeenCalledTimes(1)
+      })
+
+      // When
+      await act(async () => {
+        fireEvent.change(paddingSlider, { target: { value: '0.18' } })
+      })
+
+      // Then
+      await waitFor(() => {
+        expect(drawImageWithMosaic).toHaveBeenCalledTimes(2)
+        expect(drawImageWithMosaic).toHaveBeenLastCalledWith(
+          expect.any(Object),
+          expect.any(Object),
+          faces,
+          MOSAIC_SCALE,
+          0.18,
         )
       })
     })

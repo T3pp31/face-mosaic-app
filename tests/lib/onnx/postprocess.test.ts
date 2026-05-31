@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest'
-import { postprocessDetections, type FaceBox } from '@/lib/onnx/postprocess'
+import {
+  deduplicateFaceBoxes,
+  postprocessDetections,
+  type FaceBox,
+} from '@/lib/onnx/postprocess'
 import {
   VALUES_PER_DETECTION,
   MIN_FACE_SIZE,
@@ -312,4 +316,32 @@ describe('postprocessDetections', () => {
     expect(tiledResults.length).toBeGreaterThan(fullResults.length)
   })
 
+})
+
+describe('deduplicateFaceBoxes', () => {
+  it('重複する bbox を統合してモザイク範囲を広げる', () => {
+    const boxes: FaceBox[] = [
+      { x1: 100, y1: 100, x2: 200, y2: 200, score: 1.0 },
+      { x1: 130, y1: 130, x2: 230, y2: 230, score: 1.0 },
+    ]
+
+    const results = deduplicateFaceBoxes(boxes, 0.3)
+
+    expect(results).toHaveLength(1)
+    expect(results[0].x1).toBe(100)
+    expect(results[0].y1).toBe(100)
+    expect(results[0].x2).toBe(230)
+    expect(results[0].y2).toBe(230)
+  })
+
+  it('重ならない bbox は別々に保持する', () => {
+    const boxes: FaceBox[] = [
+      { x1: 10, y1: 10, x2: 60, y2: 60, score: 1.0 },
+      { x1: 120, y1: 10, x2: 170, y2: 60, score: 1.0 },
+    ]
+
+    const results = deduplicateFaceBoxes(boxes, 0.3)
+
+    expect(results).toHaveLength(2)
+  })
 })

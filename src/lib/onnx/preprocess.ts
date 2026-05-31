@@ -18,10 +18,15 @@ export type PreprocessResult = {
 function getImageDimensions(
   image: HTMLImageElement | HTMLVideoElement | HTMLCanvasElement,
 ): { width: number; height: number } {
-  return {
-    width: image instanceof HTMLVideoElement ? image.videoWidth : image.width,
-    height: image instanceof HTMLVideoElement ? image.videoHeight : image.height,
+  if (image instanceof HTMLVideoElement) {
+    return { width: image.videoWidth, height: image.videoHeight }
   }
+
+  if (image instanceof HTMLImageElement) {
+    return { width: image.naturalWidth, height: image.naturalHeight }
+  }
+
+  return { width: image.width, height: image.height }
 }
 
 function createTensorFromImageData(

@@ -44,6 +44,37 @@ function normalizeAndFilterFaceBoxes(
   return results
 }
 
+function expandFaceBoxWithLandmarks(
+  box: FaceBox,
+  selectedBoxes: Float32Array,
+  offset: number,
+  coordScale: number,
+  originalWidth: number,
+  originalHeight: number,
+): FaceBox {
+  let x1 = box.x1
+  let y1 = box.y1
+  let x2 = box.x2
+  let y2 = box.y2
+
+  for (let j = 0; j < 6; j++) {
+    const lmX = selectedBoxes[offset + 4 + j * 2]
+    const lmY = selectedBoxes[offset + 4 + j * 2 + 1]
+    if (lmX === 0 && lmY === 0) {
+      continue
+    }
+
+    const px = (lmX / coordScale) * originalWidth
+    const py = (lmY / coordScale) * originalHeight
+    x1 = Math.min(x1, px)
+    y1 = Math.min(y1, py)
+    x2 = Math.max(x2, px)
+    y2 = Math.max(y2, py)
+  }
+
+  return { x1, y1, x2, y2, score: box.score }
+}
+
 function decodeSelectedBoxes(
   selectedBoxes: Float32Array,
   originalWidth: number,
@@ -66,13 +97,22 @@ function decodeSelectedBoxes(
     const usesModelInputScale = xMax > 1.0 || yMax > 1.0
     const coordScale = usesModelInputScale ? MODEL_INPUT_SIZE : 1
 
-    decoded.push({
-      x1: (xMin / coordScale) * originalWidth,
-      y1: (yMin / coordScale) * originalHeight,
-      x2: (xMax / coordScale) * originalWidth,
-      y2: (yMax / coordScale) * originalHeight,
-      score: 1.0,
-    })
+    const faceBox = expandFaceBoxWithLandmarks(
+      {
+        x1: (xMin / coordScale) * originalWidth,
+        y1: (yMin / coordScale) * originalHeight,
+        x2: (xMax / coordScale) * originalWidth,
+        y2: (yMax / coordScale) * originalHeight,
+        score: 1.0,
+      },
+      selectedBoxes,
+      offset,
+      coordScale,
+      originalWidth,
+      originalHeight,
+    )
+
+    decoded.push(faceBox)
   }
 
   return decoded
@@ -113,8 +153,18 @@ function calculateIoU(a: FaceBox, b: FaceBox): number {
   return intersection / (areaA + areaB - intersection)
 }
 
+function mergeFaceBoxes(a: FaceBox, b: FaceBox): FaceBox {
+  return {
+    x1: Math.min(a.x1, b.x1),
+    y1: Math.min(a.y1, b.y1),
+    x2: Math.max(a.x2, b.x2),
+    y2: Math.max(a.y2, b.y2),
+    score: Math.max(a.score, b.score),
+  }
+}
+
 /**
- * タイル推論後の重複 FaceBox を IoU ベースで除去する
+ * タイル推論後の重複 FaceBox を IoU ベースで統合する
  */
 export function deduplicateFaceBoxes(
   boxes: FaceBox[],
@@ -124,11 +174,13 @@ export function deduplicateFaceBoxes(
   const selected: FaceBox[] = []
 
   for (const candidate of sorted) {
-    const hasOverlap = selected.some(
+    const overlapIndex = selected.findIndex(
       (existing) => calculateIoU(existing, candidate) > iouThreshold,
     )
 
-    if (!hasOverlap) {
+    if (overlapIndex >= 0) {
+      selected[overlapIndex] = mergeFaceBoxes(selected[overlapIndex], candidate)
+    } else {
       selected.push(candidate)
     }
   }
