@@ -1,3 +1,5 @@
+# main マージ後に GitHub Pages へデプロイする。
+# PR 時の検証は ci.yml（Test & Build）で行う。
 name: Deploy to GitHub Pages
 
 on:
