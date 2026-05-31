@@ -345,6 +345,7 @@ describe('useFaceDetection', () => {
         tensor,
         originalWidth: 640,
         originalHeight: 480,
+        cropRegion: { x: 0, y: 0, width: 640, height: 480 },
       })
       vi.mocked(runFaceDetection).mockResolvedValue({
         selectedBoxes: {
