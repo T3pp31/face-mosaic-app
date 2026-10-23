@@ -120,7 +120,7 @@
   user-select: none;
 }
 
-.drop-zone:hover:not(.drop-zone--disabled) {
+.drop-zone:hover:not(.drop-zone--disabled):not(.drop-zone--dragging) {
   border-color: #4a90e2;
   background-color: #f0f7ff;
 }
@@ -130,7 +130,7 @@
   outline-offset: 2px;
 }
 
-.drop-zone--dragging {
+.drop-zone.drop-zone--dragging {
   border-color: #4a90e2;
   background-color: #e8f2ff;
 }
