@@ -43,8 +43,10 @@ function applyPixelMosaic(
   h: number,
   mosaicScale: number,
 ): void {
-  const smallW = Math.max(1, Math.floor(w * mosaicScale))
-  const smallH = Math.max(1, Math.floor(h * mosaicScale))
+  // mosaicScale が極小の場合 floor(w * mosaicScale) が 0 になるため、
+  // 一時 canvas のサイズは必ず 1px 以上にクランプする（0 は InvalidStateError の原因）
+  const smallW = Math.max(1, Math.round(w * mosaicScale))
+  const smallH = Math.max(1, Math.round(h * mosaicScale))
 
   const temp = document.createElement('canvas')
   temp.width = smallW
@@ -80,6 +82,12 @@ export function drawImageWithMosaic(
   mosaicScale: number = MOSAIC_SCALE,
   paddingRatio: number = BBOX_PADDING_RATIO,
 ): void {
+  if (!Number.isFinite(mosaicScale) || mosaicScale <= 0) {
+    throw new Error(
+      `Invalid mosaicScale: ${mosaicScale}. It must be a finite number greater than 0.`,
+    )
+  }
+
   const width = getSourceWidth(image)
   const height = getSourceHeight(image)
 
@@ -114,7 +122,16 @@ export function drawImageWithMosaic(
     const h = y2Clipped - y
 
     // 幅または高さが 0 以下の場合はスキップ
+    // （パディング後の領域が 0 に丸まる極小の顔でも一時 canvas を生成しない）
     if (w <= 0 || h <= 0) {
+      continue
+    }
+
+    // 極小の顔でも mosaicScale 由来の一時 canvas は最低 1x1 を保証する
+    // （applyPixelMosaic 側でもクランプしているが、ここで明示的に検証する）
+    const smallW = Math.max(1, Math.round(w * mosaicScale))
+    const smallH = Math.max(1, Math.round(h * mosaicScale))
+    if (smallW < 1 || smallH < 1) {
       continue
     }
 

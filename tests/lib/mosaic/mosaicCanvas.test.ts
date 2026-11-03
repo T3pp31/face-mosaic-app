@@ -205,8 +205,8 @@ describe('drawImageWithMosaic', () => {
       const padBottom = 100 * BBOX_PADDING_RATIO
       const expectedW = 100 + padX * 2
       const expectedH = 100 + padTop + padBottom
-      const expectedSmallW = Math.max(1, Math.floor(expectedW * MOSAIC_SCALE))
-      const expectedSmallH = Math.max(1, Math.floor(expectedH * MOSAIC_SCALE))
+      const expectedSmallW = Math.max(1, Math.round(expectedW * MOSAIC_SCALE))
+      const expectedSmallH = Math.max(1, Math.round(expectedH * MOSAIC_SCALE))
       // ctx.drawImage(temp, 0, 0, smallW, smallH, x, y, w, h) の smallW/smallH を確認
       const drawImageCalls = (canvas.getContext('2d') as unknown as { drawImage: ReturnType<typeof vi.fn> })
         ?.drawImage?.mock.calls ?? []
@@ -356,6 +356,41 @@ describe('drawImageWithMosaic', () => {
 
       // When / Then: エラーが発生しない
       expect(() => drawImageWithMosaic(canvas, image, faces, 1.0, 0)).not.toThrow()
+    })
+
+    it('TC-18: 極小の顔 (5px) と MOSAIC_SCALE=0.03 — 一時 canvas が 1x1 以上で InvalidStateError にならない', () => {
+      // Given: 5px の顔と既定の MOSAIC_SCALE=0.03 → floor(5 * 0.03) = 0 → クランプで 1
+      const image = createMockImage(640, 480)
+      const canvas = document.createElement('canvas')
+      const { mainCtx } = setupCanvasMocks(canvas)
+      const faces: FaceBox[] = [makeFace(100, 100, 105, 105)]
+
+      // When / Then: 例外が発生しない
+      expect(() => drawImageWithMosaic(canvas, image, faces)).not.toThrow()
+
+      // Then: 拡大描画の smallW/smallH が 1 以上
+      const enlargeCalls = mainCtx.drawImage.mock.calls.filter(
+        (call: unknown[]) => call[0] !== image,
+      )
+      expect(enlargeCalls.length).toBe(1)
+      expect(enlargeCalls[0][3]).toBeGreaterThanOrEqual(1)
+      expect(enlargeCalls[0][4]).toBeGreaterThanOrEqual(1)
+    })
+
+    it('TC-19: mosaicScale <= 0 — 明確な Error をスローする', () => {
+      // Given: mosaicScale = 0
+      const image = createMockImage(640, 480)
+      const canvas = document.createElement('canvas')
+      setupCanvasMocks(canvas)
+      const faces: FaceBox[] = [makeFace(100, 100, 200, 200)]
+
+      // When / Then: 明確なエラーメッセージでスロー
+      expect(() => drawImageWithMosaic(canvas, image, faces, 0)).toThrow(
+        /Invalid mosaicScale/,
+      )
+      expect(() => drawImageWithMosaic(canvas, image, faces, -0.1)).toThrow(
+        /Invalid mosaicScale/,
+      )
     })
 
     it('TC-13: mosaicScale 極小 (0.001) — smallW/H が最低 1 になる', () => {
