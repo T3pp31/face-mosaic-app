@@ -11,7 +11,7 @@
  * | 4 | 境界値 | hasResult が true→false 切替 | 表示状態が正しく変化する              |
  */
 
-import { describe, it, expect, useRef } from 'vitest'
+import { describe, it, expect } from 'vitest'
 import { render } from '@testing-library/react'
 import { createRef } from 'react'
 import { MosaicCanvas } from '@/components/MosaicCanvas'
