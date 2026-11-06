@@ -43,6 +43,8 @@ export function ImageFaceMosaic() {
   const [confThreshold, setConfThreshold] = useState(CONF_THRESHOLD)
   const [iouThreshold, setIouThreshold] = useState(IOU_THRESHOLD)
   const [maxDetections, setMaxDetections] = useState(MAX_DETECTIONS)
+  const [noFaceDetected, setNoFaceDetected] = useState(false)
+  const [isConfirmOpen, setIsConfirmOpen] = useState(false)
 
   const { detectFaces, isModelLoading, isProcessing, error } =
     useFaceDetection()
@@ -83,6 +85,8 @@ export function ImageFaceMosaic() {
 
   async function handleFileSelect(file: File) {
     setHasResult(false)
+    setNoFaceDetected(false)
+    setIsConfirmOpen(false)
     processedRef.current = null
 
     try {
@@ -95,10 +99,42 @@ export function ImageFaceMosaic() {
 
       processedRef.current = { image, faces }
       applyMosaic(image, faces, mosaicScale, paddingRatio)
+      // 検出0件のときはモザイク未適用であることを明示する
+      setNoFaceDetected(faces.length === 0)
     } catch {
       processedRef.current = null
       setHasResult(false)
+      setNoFaceDetected(false)
     }
+  }
+
+  function handleDownloadClick() {
+    // 検出0件（モザイク未適用）の場合は確認ダイアログを挟む
+    if (noFaceDetected) {
+      setIsConfirmOpen(true)
+      return
+    }
+    downloadMosaic()
+  }
+
+  function downloadMosaic() {
+    if (canvasRef.current === null) {
+      return
+    }
+    const dataUrl = canvasRef.current.toDataURL('image/png')
+    const link = document.createElement('a')
+    link.href = dataUrl
+    link.download = 'mosaic.png'
+    link.click()
+  }
+
+  function handleConfirmDownload() {
+    setIsConfirmOpen(false)
+    downloadMosaic()
+  }
+
+  function handleCancelDownload() {
+    setIsConfirmOpen(false)
   }
 
   return (
@@ -197,7 +233,50 @@ export function ImageFaceMosaic() {
         </div>
       )}
 
+      {noFaceDetected && (
+        <div className="no-face-warning" role="alert">
+          <strong>顔が検出されませんでした。</strong>
+          この画像にはモザイクが適用されていません。
+          「検出信頼度しきい値」を初期値 {CONF_THRESHOLD.toFixed(2)} より下げて再アップロードすると、
+          顔が検出される場合があります。
+        </div>
+      )}
+
       <MosaicCanvas canvasRef={canvasRef} hasResult={hasResult} />
+
+      {hasResult && (
+        <button
+          type="button"
+          className="download-button"
+          onClick={handleDownloadClick}
+        >
+          画像をダウンロード
+        </button>
+      )}
+
+      {isConfirmOpen && (
+        <div
+          className="confirm-dialog"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="confirm-dialog-title"
+        >
+          <h2 id="confirm-dialog-title" className="confirm-dialog__title">
+            顔が検出されていません
+          </h2>
+          <p className="confirm-dialog__message">
+            この画像はモザイク処理が適用されていません。このままダウンロードしますか？
+          </p>
+          <div className="confirm-dialog__actions">
+            <button type="button" onClick={handleConfirmDownload}>
+              ダウンロードする
+            </button>
+            <button type="button" onClick={handleCancelDownload}>
+              キャンセル
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

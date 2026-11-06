@@ -7,7 +7,7 @@
  * |----|--------|----------------------------------------|-----------------------------------------------|
  * |  1 | 正常系 | 初期表示                               | DropZone が表示、canvas は非表示              |
  * |  2 | 正常系 | ファイル選択 → 成功                    | 顔検出・モザイク描画が呼ばれる               |
- * |  3 | 正常系 | ファイル選択 → 顔なし                  | drawImageWithMosaic が空配列で呼ばれる        |
+ * |  3 | 正常系 | ファイル選択 → 顔なし                  | drawImageWithMosaic が空配列で呼ばれ、警告が表示される |
  * |  4 | 正常系 | モデルロード中                         | ローディングテキストが表示される              |
  * |  5 | 正常系 | 推論処理中                             | 別のローディングテキストが表示される          |
  * |  6 | 異常系 | detectFaces がエラー                   | エラーメッセージが表示される                  |
@@ -144,6 +144,156 @@ describe('ImageFaceMosaic', () => {
       })
     })
 
+    it('TC-03d: 顔なし検出で警告アラートが表示される', async () => {
+      // Given
+      const detectFaces = vi.fn().mockResolvedValue([])
+      setupUseFaceDetectionMock({ detectFaces })
+      render(<ImageFaceMosaic />)
+
+      const input = document.querySelector('input[type="file"]') as HTMLInputElement
+      const file = new File(['dummy'], 'test.jpg', { type: 'image/jpeg' })
+
+      // When
+      await act(async () => {
+        uploadFile(input, file)
+      })
+
+      // Then
+      await waitFor(() => {
+        expect(screen.getByRole('alert')).toHaveTextContent(
+          '顔が検出されませんでした',
+        )
+        expect(screen.getByRole('alert')).toHaveTextContent(
+          'モザイクが適用されていません',
+        )
+      })
+    })
+
+    it('TC-03e: 警告に信頼度しきい値を下げる案内が含まれる', async () => {
+      // Given
+      const detectFaces = vi.fn().mockResolvedValue([])
+      setupUseFaceDetectionMock({ detectFaces })
+      render(<ImageFaceMosaic />)
+
+      const input = document.querySelector('input[type="file"]') as HTMLInputElement
+      const file = new File(['dummy'], 'test.jpg', { type: 'image/jpeg' })
+
+      // When
+      await act(async () => {
+        uploadFile(input, file)
+      })
+
+      // Then
+      await waitFor(() => {
+        expect(screen.getByRole('alert')).toHaveTextContent(
+          '検出信頼度しきい値',
+        )
+      })
+    })
+
+    it('TC-03f: 顔が検出された場合は警告アラートが表示されない', async () => {
+      // Given
+      const faces: FaceBox[] = [{ x1: 10, y1: 20, x2: 100, y2: 120, score: 1.0 }]
+      const detectFaces = vi.fn().mockResolvedValue(faces)
+      setupUseFaceDetectionMock({ detectFaces })
+      render(<ImageFaceMosaic />)
+
+      const input = document.querySelector('input[type="file"]') as HTMLInputElement
+      const file = new File(['dummy'], 'test.jpg', { type: 'image/jpeg' })
+
+      // When
+      await act(async () => {
+        uploadFile(input, file)
+      })
+
+      // Then
+      await waitFor(() => {
+        expect(drawImageWithMosaic).toHaveBeenCalledTimes(1)
+      })
+      expect(screen.queryByText('顔が検出されませんでした。')).not.toBeInTheDocument()
+    })
+
+    it('TC-03g: 新しいファイルのアップロードで警告がクリアされる', async () => {
+      // Given
+      const detectFaces = vi
+        .fn()
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([{ x1: 10, y1: 20, x2: 100, y2: 120, score: 1.0 }])
+      setupUseFaceDetectionMock({ detectFaces })
+      render(<ImageFaceMosaic />)
+
+      const input = document.querySelector('input[type="file"]') as HTMLInputElement
+      const file = new File(['dummy'], 'test.jpg', { type: 'image/jpeg' })
+
+      await act(async () => {
+        uploadFile(input, file)
+      })
+      await waitFor(() => {
+        expect(screen.getByRole('alert')).toBeInTheDocument()
+      })
+
+      // When
+      await act(async () => {
+        uploadFile(input, file)
+      })
+
+      // Then
+      await waitFor(() => {
+        expect(detectFaces).toHaveBeenCalledTimes(2)
+        expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+      })
+    })
+
+    it('TC-03h: 顔なしのときダウンロードで確認ダイアログが開き、キャンセルで閉じる', async () => {
+      // Given
+      const detectFaces = vi.fn().mockResolvedValue([])
+      setupUseFaceDetectionMock({ detectFaces })
+      render(<ImageFaceMosaic />)
+
+      const input = document.querySelector('input[type="file"]') as HTMLInputElement
+      const file = new File(['dummy'], 'test.jpg', { type: 'image/jpeg' })
+
+      await act(async () => {
+        uploadFile(input, file)
+      })
+
+      // When
+      fireEvent.click(screen.getByRole('button', { name: '画像をダウンロード' }))
+
+      // Then
+      expect(screen.getByRole('dialog')).toBeInTheDocument()
+
+      // When: キャンセル
+      fireEvent.click(screen.getByRole('button', { name: 'キャンセル' }))
+
+      // Then
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    })
+
+    it('TC-03i: 顔が検出された場合はダウンロードで確認ダイアログが出ない', async () => {
+      // Given
+      const faces: FaceBox[] = [{ x1: 10, y1: 20, x2: 100, y2: 120, score: 1.0 }]
+      const detectFaces = vi.fn().mockResolvedValue(faces)
+      setupUseFaceDetectionMock({ detectFaces })
+      render(<ImageFaceMosaic />)
+
+      const input = document.querySelector('input[type="file"]') as HTMLInputElement
+      const file = new File(['dummy'], 'test.jpg', { type: 'image/jpeg' })
+
+      await act(async () => {
+        uploadFile(input, file)
+      })
+      await waitFor(() => {
+        expect(drawImageWithMosaic).toHaveBeenCalledTimes(1)
+      })
+
+      // When
+      fireEvent.click(screen.getByRole('button', { name: '画像をダウンロード' }))
+
+      // Then
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    })
+
     it('TC-03b: padding のスライダー操作で drawImageWithMosaic の引数が変わる', async () => {
       // Given
       const detectFaces = vi.fn().mockResolvedValue([])
@@ -242,6 +392,27 @@ describe('ImageFaceMosaic', () => {
       // Then
       expect(screen.getByRole('alert')).toBeInTheDocument()
       expect(screen.getByRole('alert')).toHaveTextContent('テストエラー')
+    })
+
+    it('TC-06c: detectFaces が例外を投げた場合は警告が表示されない', async () => {
+      // Given
+      const detectFaces = vi.fn().mockRejectedValue(new Error('boom'))
+      setupUseFaceDetectionMock({ detectFaces })
+      render(<ImageFaceMosaic />)
+
+      const input = document.querySelector('input[type="file"]') as HTMLInputElement
+      const file = new File(['dummy'], 'test.jpg', { type: 'image/jpeg' })
+
+      // When
+      await act(async () => {
+        uploadFile(input, file)
+      })
+
+      // Then
+      await waitFor(() => {
+        expect(detectFaces).toHaveBeenCalledTimes(1)
+      })
+      expect(screen.queryByText('顔が検出されませんでした。')).not.toBeInTheDocument()
     })
 
     it('TC-06b: error がない場合にエラーメッセージが表示されない', () => {
