@@ -14,7 +14,7 @@
  * |  7 | 境界値 | ローディング中に disabled が適用       | ImageUploader の disabled が true になる      |
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, waitFor, fireEvent, act } from '@testing-library/react'
 import { ImageFaceMosaic } from '@/components/ImageFaceMosaic'
 
@@ -80,6 +80,11 @@ describe('ImageFaceMosaic', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     vi.mocked(loadImageFromFile).mockResolvedValue(createMockImage())
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+    vi.restoreAllMocks()
   })
 
   // =====================================================================
@@ -297,20 +302,86 @@ describe('ImageFaceMosaic', () => {
       })
 
       // When
+      vi.useFakeTimers()
       fireEvent.click(screen.getByRole('button', { name: '画像をダウンロード' }))
       fireEvent.click(screen.getByRole('button', { name: 'ダウンロードする' }))
 
-      // Then
+      // Then: ブラウザの保存開始前に URL を無効化しない
       expect(toBlobSpy).toHaveBeenCalledTimes(1)
       expect(createObjectURLSpy).toHaveBeenCalledTimes(1)
       expect(clickSpy).toHaveBeenCalledTimes(1)
-      expect(revokeObjectURLSpy).toHaveBeenCalledWith('blob:mock-url')
+      expect(revokeObjectURLSpy).not.toHaveBeenCalled()
       expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
 
-      toBlobSpy.mockRestore()
-      createObjectURLSpy.mockRestore()
-      revokeObjectURLSpy.mockRestore()
-      clickSpy.mockRestore()
+      act(() => {
+        vi.advanceTimersByTime(60_000)
+      })
+      expect(revokeObjectURLSpy).toHaveBeenCalledWith('blob:mock-url')
+
+    })
+
+    it('TC-03h3: ダイアログはモーダルであり、フォーカス・Escape・Tab 循環を制御する', async () => {
+      const detectFaces = vi.fn().mockResolvedValue([])
+      setupUseFaceDetectionMock({ detectFaces })
+      render(<ImageFaceMosaic />)
+      const input = document.querySelector('input[type="file"]') as HTMLInputElement
+      await act(async () => {
+        uploadFile(input, new File(['x'], 'test.jpg', { type: 'image/jpeg' }))
+      })
+
+      const downloadButton = screen.getByRole('button', { name: '画像をダウンロード' })
+      // ダイアログをまだ開いていない時点ではフォーカスを奪わない
+      expect(downloadButton).not.toHaveFocus()
+      fireEvent.click(downloadButton)
+
+      const dialog = screen.getByRole('dialog')
+      const confirm = screen.getByRole('button', { name: 'ダウンロードする' })
+      const cancel = screen.getByRole('button', { name: 'キャンセル' })
+      expect(dialog).toHaveAttribute('aria-modal', 'true')
+      expect(dialog).toHaveAttribute('aria-describedby', 'confirm-dialog-message')
+      expect(document.querySelector('.image-face-mosaic__content')).toHaveAttribute('inert')
+      expect(confirm).toHaveFocus()
+
+      cancel.focus()
+      fireEvent.keyDown(cancel, { key: 'Tab' })
+      expect(confirm).toHaveFocus()
+      fireEvent.keyDown(confirm, { key: 'Tab', shiftKey: true })
+      expect(cancel).toHaveFocus()
+
+      fireEvent.keyDown(cancel, { key: 'Escape' })
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+      expect(downloadButton).toHaveFocus()
+      expect(document.querySelector('.image-face-mosaic__content')).not.toHaveAttribute('inert')
+    })
+
+    it('TC-03h4: 未検出画像のキャンセルでは PNG エンコードを実行しない', async () => {
+      setupUseFaceDetectionMock({ detectFaces: vi.fn().mockResolvedValue([]) })
+      const toBlobSpy = vi.spyOn(HTMLCanvasElement.prototype, 'toBlob').mockImplementation(() => {})
+      render(<ImageFaceMosaic />)
+      const input = document.querySelector('input[type="file"]') as HTMLInputElement
+      await act(async () => {
+        uploadFile(input, new File(['x'], 'test.jpg', { type: 'image/jpeg' }))
+      })
+      fireEvent.click(screen.getByRole('button', { name: '画像をダウンロード' }))
+      expect(toBlobSpy).not.toHaveBeenCalled()
+      fireEvent.click(screen.getByRole('button', { name: 'キャンセル' }))
+      expect(toBlobSpy).not.toHaveBeenCalled()
+    })
+
+    it('TC-03h5: PNG エンコード失敗時にはエラーを表示し、保存しない', async () => {
+      setupUseFaceDetectionMock({ detectFaces: vi.fn().mockResolvedValue([]) })
+      vi.spyOn(HTMLCanvasElement.prototype, 'toBlob')
+        .mockImplementation((cb: BlobCallback) => cb(null))
+      const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
+      render(<ImageFaceMosaic />)
+      const input = document.querySelector('input[type="file"]') as HTMLInputElement
+      await act(async () => {
+        uploadFile(input, new File(['x'], 'test.jpg', { type: 'image/jpeg' }))
+      })
+      fireEvent.click(screen.getByRole('button', { name: '画像をダウンロード' }))
+      fireEvent.click(screen.getByRole('button', { name: 'ダウンロードする' }))
+      expect(screen.getByText('画像の書き出しに失敗しました。もう一度お試しください。')).toBeInTheDocument()
+      expect(clickSpy).not.toHaveBeenCalled()
     })
 
     it('TC-03i: 顔が検出された場合はダウンロードで確認ダイアログが出ず、ダウンロードが実行される', async () => {
@@ -352,10 +423,6 @@ describe('ImageFaceMosaic', () => {
       expect(toBlobSpy).toHaveBeenCalledTimes(1)
       expect(clickSpy).toHaveBeenCalledTimes(1)
 
-      toBlobSpy.mockRestore()
-      createObjectURLSpy.mockRestore()
-      revokeObjectURLSpy.mockRestore()
-      clickSpy.mockRestore()
     })
 
     it('TC-03b: padding のスライダー操作で drawImageWithMosaic の引数が変わる', async () => {

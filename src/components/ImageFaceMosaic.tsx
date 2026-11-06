@@ -27,6 +27,9 @@ type ProcessedImage = {
   faces: FaceBox[]
 }
 
+// ダウンロード開始処理が URL を参照し終える前に解放しない。
+const DOWNLOAD_URL_REVOKE_DELAY_MS = 60_000
+
 /**
  * 顔モザイクのメインコンポーネント
  *
@@ -40,6 +43,7 @@ export function ImageFaceMosaic() {
   const downloadButtonRef = useRef<HTMLButtonElement>(null)
   const confirmButtonRef = useRef<HTMLButtonElement>(null)
   const dialogRef = useRef<HTMLDivElement>(null)
+  const wasConfirmOpenRef = useRef(false)
   const [hasResult, setHasResult] = useState(false)
   const [paddingRatio, setPaddingRatio] = useState(BBOX_PADDING_RATIO)
   const [mosaicScale, setMosaicScale] = useState(MOSAIC_SCALE)
@@ -48,6 +52,7 @@ export function ImageFaceMosaic() {
   const [maxDetections, setMaxDetections] = useState(MAX_DETECTIONS)
   const [noFaceDetected, setNoFaceDetected] = useState(false)
   const [isConfirmOpen, setIsConfirmOpen] = useState(false)
+  const [downloadError, setDownloadError] = useState<string | null>(null)
 
   const { detectFaces, isModelLoading, isProcessing, error } =
     useFaceDetection()
@@ -90,6 +95,7 @@ export function ImageFaceMosaic() {
     setHasResult(false)
     setNoFaceDetected(false)
     setIsConfirmOpen(false)
+    setDownloadError(null)
     processedRef.current = null
 
     try {
@@ -114,23 +120,39 @@ export function ImageFaceMosaic() {
   function downloadMosaic() {
     const canvas = canvasRef.current
     if (canvas === null) {
+      setDownloadError('画像の書き出しに失敗しました。もう一度お試しください。')
       return
     }
-    // toDataURL は同期でメインスレッドをブロックするため、非同期の toBlob を使い、
-    // ObjectURL を一時アンカー経由でダウンロードした後に解放する。
-    canvas.toBlob((blob) => {
-      if (blob === null) {
-        return
-      }
-      const url = URL.createObjectURL(blob)
-      const link = document.createElement('a')
-      link.href = url
-      link.download = 'mosaic.png'
-      document.body.appendChild(link)
-      link.click()
-      link.remove()
-      URL.revokeObjectURL(url)
-    }, 'image/png')
+
+    setDownloadError(null)
+    try {
+      // 非同期に PNG を生成する。Object URL はダウンロード開始まで保持する。
+      canvas.toBlob((blob) => {
+        if (blob === null) {
+          setDownloadError('画像の書き出しに失敗しました。もう一度お試しください。')
+          return
+        }
+
+        try {
+          const url = URL.createObjectURL(blob)
+          const link = document.createElement('a')
+          link.href = url
+          link.download = 'mosaic.png'
+          try {
+            document.body.appendChild(link)
+            link.click()
+          } finally {
+            link.remove()
+            // click() 直後の解放はブラウザによって保存開始と競合する。
+            window.setTimeout(() => URL.revokeObjectURL(url), DOWNLOAD_URL_REVOKE_DELAY_MS)
+          }
+        } catch {
+          setDownloadError('画像のダウンロードを開始できませんでした。もう一度お試しください。')
+        }
+      }, 'image/png')
+    } catch {
+      setDownloadError('画像の書き出しに失敗しました。もう一度お試しください。')
+    }
   }
 
   function handleDownloadClick() {
@@ -151,14 +173,16 @@ export function ImageFaceMosaic() {
     setIsConfirmOpen(false)
   }
 
-  // 確認ダイアログのフォース管理：開いたら確認ボタンにフォース、閉じたら元のダウンロードボタンにフォースを戻す
+  // モーダルを開いたときだけフォーカスを移し、閉じたときだけ元に戻す。
+  // 通常の画像処理完了時にダウンロードボタンへフォーカスを奪わない。
   useEffect(() => {
     if (isConfirmOpen) {
       confirmButtonRef.current?.focus()
-    } else if (hasResult) {
+    } else if (wasConfirmOpenRef.current) {
       downloadButtonRef.current?.focus()
     }
-  }, [isConfirmOpen, hasResult])
+    wasConfirmOpenRef.current = isConfirmOpen
+  }, [isConfirmOpen])
 
   function handleDialogKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
     if (event.key === 'Escape') {
@@ -201,145 +225,153 @@ export function ImageFaceMosaic() {
 
   return (
     <div className="image-face-mosaic">
-      <ImageUploader onFileSelect={handleFileSelect} disabled={isLoading} />
+      <div className="image-face-mosaic__content" inert={isConfirmOpen}>
+        <ImageUploader onFileSelect={handleFileSelect} disabled={isLoading} />
 
-      <div className="mosaic-controls" aria-label="モザイク調整">
-        <label className="mosaic-controls__item" htmlFor="conf-threshold">
-          <span>検出信頼度しきい値: {confThreshold.toFixed(2)}</span>
-          <input
-            id="conf-threshold"
-            type="range"
-            min={CONF_THRESHOLD_MIN}
-            max={CONF_THRESHOLD_MAX}
-            step={CONF_THRESHOLD_STEP}
-            value={confThreshold}
-            onChange={(event) => setConfThreshold(Number(event.target.value))}
-          />
-        </label>
+        <div className="mosaic-controls" aria-label="モザイク調整">
+          <label className="mosaic-controls__item" htmlFor="conf-threshold">
+            <span>検出信頼度しきい値: {confThreshold.toFixed(2)}</span>
+            <input
+              id="conf-threshold"
+              type="range"
+              min={CONF_THRESHOLD_MIN}
+              max={CONF_THRESHOLD_MAX}
+              step={CONF_THRESHOLD_STEP}
+              value={confThreshold}
+              onChange={(event) => setConfThreshold(Number(event.target.value))}
+            />
+          </label>
 
-        <label className="mosaic-controls__item" htmlFor="iou-threshold">
-          <span>重複除去しきい値 (IoU): {iouThreshold.toFixed(2)}</span>
-          <input
-            id="iou-threshold"
-            type="range"
-            min={IOU_THRESHOLD_MIN}
-            max={IOU_THRESHOLD_MAX}
-            step={IOU_THRESHOLD_STEP}
-            value={iouThreshold}
-            onChange={(event) => setIouThreshold(Number(event.target.value))}
-          />
-        </label>
+          <label className="mosaic-controls__item" htmlFor="iou-threshold">
+            <span>重複除去しきい値 (IoU): {iouThreshold.toFixed(2)}</span>
+            <input
+              id="iou-threshold"
+              type="range"
+              min={IOU_THRESHOLD_MIN}
+              max={IOU_THRESHOLD_MAX}
+              step={IOU_THRESHOLD_STEP}
+              value={iouThreshold}
+              onChange={(event) => setIouThreshold(Number(event.target.value))}
+            />
+          </label>
 
-        <label className="mosaic-controls__item" htmlFor="max-detections">
-          <span>最大検出数: {maxDetections}</span>
-          <input
-            id="max-detections"
-            type="range"
-            min={MAX_DETECTIONS_MIN}
-            max={MAX_DETECTIONS_MAX}
-            step={MAX_DETECTIONS_STEP}
-            value={maxDetections}
-            onChange={(event) => setMaxDetections(Number(event.target.value))}
-          />
-        </label>
+          <label className="mosaic-controls__item" htmlFor="max-detections">
+            <span>最大検出数: {maxDetections}</span>
+            <input
+              id="max-detections"
+              type="range"
+              min={MAX_DETECTIONS_MIN}
+              max={MAX_DETECTIONS_MAX}
+              step={MAX_DETECTIONS_STEP}
+              value={maxDetections}
+              onChange={(event) => setMaxDetections(Number(event.target.value))}
+            />
+          </label>
 
-        <p className="mosaic-controls__hint">
-          検出が少ない場合は「検出信頼度しきい値」を初期値
-          {CONF_THRESHOLD.toFixed(2)} より下げると、検出数が増える場合があります。
-        </p>
-
-        <label className="mosaic-controls__item" htmlFor="padding-ratio">
-          <span>顔枠を少し広げる量: {paddingRatio.toFixed(2)}</span>
-          <input
-            id="padding-ratio"
-            type="range"
-            min={0}
-            max={0.2}
-            step={0.01}
-            value={paddingRatio}
-            onChange={(event) => setPaddingRatio(Number(event.target.value))}
-          />
-        </label>
-
-        <label className="mosaic-controls__item" htmlFor="mosaic-scale">
-          <span>モザイクの粗さ: {mosaicScale.toFixed(2)}</span>
-          <input
-            id="mosaic-scale"
-            type="range"
-            min={0.01}
-            max={0.2}
-            step={0.01}
-            value={mosaicScale}
-            onChange={(event) => setMosaicScale(Number(event.target.value))}
-          />
-        </label>
-      </div>
-
-      {isModelLoading && (
-        <div className="loading" role="status" aria-live="polite">
-          <span className="loading__spinner" aria-hidden="true" />
-          <span>AIモデルを読み込んでいます...</span>
-        </div>
-      )}
-
-      {isProcessing && !isModelLoading && (
-        <div className="loading" role="status" aria-live="polite">
-          <span className="loading__spinner" aria-hidden="true" />
-          <span>顔を検出しています...</span>
-        </div>
-      )}
-
-      {error && (
-        <div className="error" role="alert">
-          <strong>エラー:</strong> {error}
-        </div>
-      )}
-
-      {!error && noFaceDetected && (
-        <div className="no-face-warning" role="alert">
-          <strong>顔が検出されませんでした。</strong>
-          この画像にはモザイクが適用されていません。
-          「検出信頼度しきい値」を現在のしきい値（{confThreshold.toFixed(2)}）よりさらに下げて再アップロードすると、
-          顔が検出される場合があります。
-        </div>
-      )}
-
-      <MosaicCanvas canvasRef={canvasRef} hasResult={hasResult} />
-
-      {hasResult && (
-        <button
-          ref={downloadButtonRef}
-          type="button"
-          className="download-button"
-          onClick={handleDownloadClick}
-        >
-          画像をダウンロード
-        </button>
-      )}
-
-      {isConfirmOpen && (
-        <div
-          ref={dialogRef}
-          className="confirm-dialog"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="confirm-dialog-title"
-          aria-describedby="confirm-dialog-message"
-          onKeyDown={handleDialogKeyDown}
-        >
-          <h2 id="confirm-dialog-title" className="confirm-dialog__title">
-            顔が検出されていません
-          </h2>
-          <p id="confirm-dialog-message" className="confirm-dialog__message">
-            この画像はモザイク処理が適用されていません。このままダウンロードしますか？
+          <p className="mosaic-controls__hint">
+            検出が少ない場合は「検出信頼度しきい値」を初期値
+            {CONF_THRESHOLD.toFixed(2)} より下げると、検出数が増える場合があります。
           </p>
-          <div className="confirm-dialog__actions">
-            <button ref={confirmButtonRef} type="button" onClick={handleConfirmDownload}>
-              ダウンロードする
-            </button>
-            <button type="button" onClick={handleCancelDownload}>
-              キャンセル
-            </button>
+
+          <label className="mosaic-controls__item" htmlFor="padding-ratio">
+            <span>顔枠を少し広げる量: {paddingRatio.toFixed(2)}</span>
+            <input
+              id="padding-ratio"
+              type="range"
+              min={0}
+              max={0.2}
+              step={0.01}
+              value={paddingRatio}
+              onChange={(event) => setPaddingRatio(Number(event.target.value))}
+            />
+          </label>
+
+          <label className="mosaic-controls__item" htmlFor="mosaic-scale">
+            <span>モザイクの粗さ: {mosaicScale.toFixed(2)}</span>
+            <input
+              id="mosaic-scale"
+              type="range"
+              min={0.01}
+              max={0.2}
+              step={0.01}
+              value={mosaicScale}
+              onChange={(event) => setMosaicScale(Number(event.target.value))}
+            />
+          </label>
+        </div>
+
+        {isModelLoading && (
+          <div className="loading" role="status" aria-live="polite">
+            <span className="loading__spinner" aria-hidden="true" />
+            <span>AIモデルを読み込んでいます...</span>
+          </div>
+        )}
+
+        {isProcessing && !isModelLoading && (
+          <div className="loading" role="status" aria-live="polite">
+            <span className="loading__spinner" aria-hidden="true" />
+            <span>顔を検出しています...</span>
+          </div>
+        )}
+
+        {error && (
+          <div className="error" role="alert">
+            <strong>エラー:</strong> {error}
+          </div>
+        )}
+
+        {!error && noFaceDetected && (
+          <div className="no-face-warning" role="alert">
+            <strong>顔が検出されませんでした。</strong>
+            この画像にはモザイクが適用されていません。
+            「検出信頼度しきい値」を現在のしきい値（{confThreshold.toFixed(2)}）よりさらに下げて再アップロードすると、
+            顔が検出される場合があります。
+          </div>
+        )}
+
+        <MosaicCanvas canvasRef={canvasRef} hasResult={hasResult} />
+
+        {hasResult && (
+          <button
+            ref={downloadButtonRef}
+            type="button"
+            className="download-button"
+            onClick={handleDownloadClick}
+          >
+            画像をダウンロード
+          </button>
+        )}
+
+        {downloadError && (
+          <div className="error" role="alert">{downloadError}</div>
+        )}
+
+      </div>
+      {isConfirmOpen && (
+        <div className="confirm-dialog__overlay">
+          <div
+            ref={dialogRef}
+            className="confirm-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="confirm-dialog-title"
+            aria-describedby="confirm-dialog-message"
+            onKeyDown={handleDialogKeyDown}
+          >
+            <h2 id="confirm-dialog-title" className="confirm-dialog__title">
+              顔が検出されていません
+            </h2>
+            <p id="confirm-dialog-message" className="confirm-dialog__message">
+              この画像はモザイク処理が適用されていません。このままダウンロードしますか？
+            </p>
+            <div className="confirm-dialog__actions">
+              <button ref={confirmButtonRef} type="button" onClick={handleConfirmDownload}>
+                ダウンロードする
+              </button>
+              <button type="button" onClick={handleCancelDownload}>
+                キャンセル
+              </button>
+            </div>
           </div>
         </div>
       )}
