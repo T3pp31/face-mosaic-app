@@ -169,7 +169,7 @@ describe('ImageFaceMosaic', () => {
       })
     })
 
-    it('TC-03e: 警告に信頼度しきい値を下げる案内が含まれる', async () => {
+    it('TC-03e: 警告に現在の信頼度しきい値を下げる案内が含まれる', async () => {
       // Given
       const detectFaces = vi.fn().mockResolvedValue([])
       setupUseFaceDetectionMock({ detectFaces })
@@ -185,9 +185,8 @@ describe('ImageFaceMosaic', () => {
 
       // Then
       await waitFor(() => {
-        expect(screen.getByRole('alert')).toHaveTextContent(
-          '検出信頼度しきい値',
-        )
+        expect(screen.getByRole('alert')).toHaveTextContent('検出信頼度しきい値')
+        expect(screen.getByRole('alert')).toHaveTextContent('0.50')
       })
     })
 
@@ -270,11 +269,69 @@ describe('ImageFaceMosaic', () => {
       expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
     })
 
-    it('TC-03i: 顔が検出された場合はダウンロードで確認ダイアログが出ない', async () => {
+    it('TC-03h2: 確認ダイアログで「ダウンロードする」押下で toBlob とアンカークリックが実行され、ダイアログが閉じる', async () => {
+      // Given
+      const detectFaces = vi.fn().mockResolvedValue([])
+      setupUseFaceDetectionMock({ detectFaces })
+      const toBlobSpy = vi
+        .spyOn(HTMLCanvasElement.prototype, 'toBlob')
+        .mockImplementation(function (cb: BlobCallback) {
+          cb(new Blob(['x'], { type: 'image/png' }))
+        })
+      const createObjectURLSpy = vi
+        .spyOn(URL, 'createObjectURL')
+        .mockReturnValue('blob:mock-url')
+      const revokeObjectURLSpy = vi
+        .spyOn(URL, 'revokeObjectURL')
+        .mockImplementation(() => {})
+      const clickSpy = vi
+        .spyOn(HTMLAnchorElement.prototype, 'click')
+        .mockImplementation(() => {})
+      render(<ImageFaceMosaic />)
+
+      const input = document.querySelector('input[type="file"]') as HTMLInputElement
+      const file = new File(['dummy'], 'test.jpg', { type: 'image/jpeg' })
+
+      await act(async () => {
+        uploadFile(input, file)
+      })
+
+      // When
+      fireEvent.click(screen.getByRole('button', { name: '画像をダウンロード' }))
+      fireEvent.click(screen.getByRole('button', { name: 'ダウンロードする' }))
+
+      // Then
+      expect(toBlobSpy).toHaveBeenCalledTimes(1)
+      expect(createObjectURLSpy).toHaveBeenCalledTimes(1)
+      expect(clickSpy).toHaveBeenCalledTimes(1)
+      expect(revokeObjectURLSpy).toHaveBeenCalledWith('blob:mock-url')
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+
+      toBlobSpy.mockRestore()
+      createObjectURLSpy.mockRestore()
+      revokeObjectURLSpy.mockRestore()
+      clickSpy.mockRestore()
+    })
+
+    it('TC-03i: 顔が検出された場合はダウンロードで確認ダイアログが出ず、ダウンロードが実行される', async () => {
       // Given
       const faces: FaceBox[] = [{ x1: 10, y1: 20, x2: 100, y2: 120, score: 1.0 }]
       const detectFaces = vi.fn().mockResolvedValue(faces)
       setupUseFaceDetectionMock({ detectFaces })
+      const toBlobSpy = vi
+        .spyOn(HTMLCanvasElement.prototype, 'toBlob')
+        .mockImplementation(function (cb: BlobCallback) {
+          cb(new Blob(['x'], { type: 'image/png' }))
+        })
+      const createObjectURLSpy = vi
+        .spyOn(URL, 'createObjectURL')
+        .mockReturnValue('blob:mock-url')
+      const revokeObjectURLSpy = vi
+        .spyOn(URL, 'revokeObjectURL')
+        .mockImplementation(() => {})
+      const clickSpy = vi
+        .spyOn(HTMLAnchorElement.prototype, 'click')
+        .mockImplementation(() => {})
       render(<ImageFaceMosaic />)
 
       const input = document.querySelector('input[type="file"]') as HTMLInputElement
@@ -292,6 +349,13 @@ describe('ImageFaceMosaic', () => {
 
       // Then
       expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+      expect(toBlobSpy).toHaveBeenCalledTimes(1)
+      expect(clickSpy).toHaveBeenCalledTimes(1)
+
+      toBlobSpy.mockRestore()
+      createObjectURLSpy.mockRestore()
+      revokeObjectURLSpy.mockRestore()
+      clickSpy.mockRestore()
     })
 
     it('TC-03b: padding のスライダー操作で drawImageWithMosaic の引数が変わる', async () => {

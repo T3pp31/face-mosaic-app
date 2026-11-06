@@ -37,6 +37,9 @@ type ProcessedImage = {
 export function ImageFaceMosaic() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const processedRef = useRef<ProcessedImage | null>(null)
+  const downloadButtonRef = useRef<HTMLButtonElement>(null)
+  const confirmButtonRef = useRef<HTMLButtonElement>(null)
+  const dialogRef = useRef<HTMLDivElement>(null)
   const [hasResult, setHasResult] = useState(false)
   const [paddingRatio, setPaddingRatio] = useState(BBOX_PADDING_RATIO)
   const [mosaicScale, setMosaicScale] = useState(MOSAIC_SCALE)
@@ -108,6 +111,28 @@ export function ImageFaceMosaic() {
     }
   }
 
+  function downloadMosaic() {
+    const canvas = canvasRef.current
+    if (canvas === null) {
+      return
+    }
+    // toDataURL は同期でメインスレッドをブロックするため、非同期の toBlob を使い、
+    // ObjectURL を一時アンカー経由でダウンロードした後に解放する。
+    canvas.toBlob((blob) => {
+      if (blob === null) {
+        return
+      }
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = 'mosaic.png'
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      URL.revokeObjectURL(url)
+    }, 'image/png')
+  }
+
   function handleDownloadClick() {
     // 検出0件（モザイク未適用）の場合は確認ダイアログを挟む
     if (noFaceDetected) {
@@ -117,17 +142,6 @@ export function ImageFaceMosaic() {
     downloadMosaic()
   }
 
-  function downloadMosaic() {
-    if (canvasRef.current === null) {
-      return
-    }
-    const dataUrl = canvasRef.current.toDataURL('image/png')
-    const link = document.createElement('a')
-    link.href = dataUrl
-    link.download = 'mosaic.png'
-    link.click()
-  }
-
   function handleConfirmDownload() {
     setIsConfirmOpen(false)
     downloadMosaic()
@@ -135,6 +149,54 @@ export function ImageFaceMosaic() {
 
   function handleCancelDownload() {
     setIsConfirmOpen(false)
+  }
+
+  // 確認ダイアログのフォース管理：開いたら確認ボタンにフォース、閉じたら元のダウンロードボタンにフォースを戻す
+  useEffect(() => {
+    if (isConfirmOpen) {
+      confirmButtonRef.current?.focus()
+    } else if (hasResult) {
+      downloadButtonRef.current?.focus()
+    }
+  }, [isConfirmOpen, hasResult])
+
+  function handleDialogKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
+    if (event.key === 'Escape') {
+      event.preventDefault()
+      handleCancelDownload()
+      return
+    }
+
+    if (event.key !== 'Tab') {
+      return
+    }
+
+    // フォーストラップ：ダイアログ内のフォース可能要素間で循環させる
+    const dialog = dialogRef.current
+    if (dialog === null) {
+      return
+    }
+    const focusable = Array.from(
+      dialog.querySelectorAll<HTMLElement>(
+        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
+      ),
+    ).filter((el) => !el.hasAttribute('disabled'))
+    if (focusable.length === 0) {
+      return
+    }
+    const first = focusable[0]
+    const last = focusable[focusable.length - 1]
+    const active = document.activeElement
+
+    if (event.shiftKey) {
+      if (active === first || !dialog.contains(active)) {
+        event.preventDefault()
+        last.focus()
+      }
+    } else if (active === last || !dialog.contains(active)) {
+      event.preventDefault()
+      first.focus()
+    }
   }
 
   return (
@@ -233,11 +295,11 @@ export function ImageFaceMosaic() {
         </div>
       )}
 
-      {noFaceDetected && (
+      {!error && noFaceDetected && (
         <div className="no-face-warning" role="alert">
           <strong>顔が検出されませんでした。</strong>
           この画像にはモザイクが適用されていません。
-          「検出信頼度しきい値」を初期値 {CONF_THRESHOLD.toFixed(2)} より下げて再アップロードすると、
+          「検出信頼度しきい値」を現在のしきい値（{confThreshold.toFixed(2)}）よりさらに下げて再アップロードすると、
           顔が検出される場合があります。
         </div>
       )}
@@ -246,6 +308,7 @@ export function ImageFaceMosaic() {
 
       {hasResult && (
         <button
+          ref={downloadButtonRef}
           type="button"
           className="download-button"
           onClick={handleDownloadClick}
@@ -256,19 +319,22 @@ export function ImageFaceMosaic() {
 
       {isConfirmOpen && (
         <div
+          ref={dialogRef}
           className="confirm-dialog"
           role="dialog"
           aria-modal="true"
           aria-labelledby="confirm-dialog-title"
+          aria-describedby="confirm-dialog-message"
+          onKeyDown={handleDialogKeyDown}
         >
           <h2 id="confirm-dialog-title" className="confirm-dialog__title">
             顔が検出されていません
           </h2>
-          <p className="confirm-dialog__message">
+          <p id="confirm-dialog-message" className="confirm-dialog__message">
             この画像はモザイク処理が適用されていません。このままダウンロードしますか？
           </p>
           <div className="confirm-dialog__actions">
-            <button type="button" onClick={handleConfirmDownload}>
+            <button ref={confirmButtonRef} type="button" onClick={handleConfirmDownload}>
               ダウンロードする
             </button>
             <button type="button" onClick={handleCancelDownload}>
