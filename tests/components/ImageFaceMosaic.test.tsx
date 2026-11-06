@@ -421,8 +421,9 @@ describe('ImageFaceMosaic', () => {
       // Then
       expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
       expect(toBlobSpy).toHaveBeenCalledTimes(1)
+      expect(createObjectURLSpy).toHaveBeenCalledTimes(1)
       expect(clickSpy).toHaveBeenCalledTimes(1)
-
+      expect(revokeObjectURLSpy).not.toHaveBeenCalled()
     })
 
     it('TC-03b: padding のスライダー操作で drawImageWithMosaic の引数が変わる', async () => {
