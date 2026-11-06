@@ -139,12 +139,6 @@ postprocessDetections()
   - [y_min, x_min, y_max, x_max] → [x1, y1, x2, y2] (ピクセル座標)
   - MIN_FACE_SIZE 未満を除外
   ↓
-検出件数を判定
-  - 0件の場合は「顔が検出されずモザイク未適用」を明示して警告
-  - 信頼度しきい値を下げて再アップロードする方法を案内
-  - 0件の画像を保存する場合は未加工であることを確認するダイアログを表示
-  - 新規アップロード時／顔を検出した場合は警告を解除
-  ↓
 drawImageWithMosaic()
   - 元画像を Canvas に描画
   - 各 FaceBox に BBOX_PADDING_RATIO 分だけ拡張
@@ -231,8 +225,6 @@ GitHub リポジトリの Settings → Pages → Source を **「GitHub Actions�
 * 顔検出 (BlazeFace)
 * bbox にモザイク
 * 結果を Canvas に表示
-* 検出0件では警告と再試行ガイドを表示（モザイク未適用であることを明示）
-* 検出0件の未加工画像をダウンロードする前に確認を求める
 
 ### Phase 2 (今後)
 
