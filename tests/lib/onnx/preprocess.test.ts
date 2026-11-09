@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, vi, afterEach } from 'vitest'
 import { preprocessImageToTensor } from '@/lib/onnx/preprocess'
 import { MODEL_INPUT_SIZE } from '@/config/constants'
 
@@ -194,7 +194,7 @@ describe('preprocessImageToTensor', () => {
 
   it('TC06: inputSize=1 のとき shape [1,3,1,1] のテンソルを返す', () => {
     // Given
-    mockCanvasContext((_size) => new Uint8ClampedArray(1 * 4))
+    mockCanvasContext(() => new Uint8ClampedArray(1 * 4))
     const img = makeImageMock(64, 64)
 
     // When
