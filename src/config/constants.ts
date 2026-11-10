@@ -27,6 +27,11 @@ export const MAX_DETECTIONS_STEP = 1
 
 /**
  * Mosaic rendering configuration
+ *
+ * MOSAIC_SCALE は縮小率（0 < mosaicScale <= 1）。
+ * 一時 canvas のサイズは Math.max(1, Math.round(w * MOSAIC_SCALE)) で
+ * 最低 1px にクランプされるため、MIN_FACE_SIZE (5px) 程度の極小の顔でも
+ * 0 サイズの canvas による InvalidStateError は発生しない。
  */
 export const MOSAIC_SCALE = 0.03
 export const BBOX_PADDING_RATIO = 0.15
