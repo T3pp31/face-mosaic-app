@@ -71,6 +71,8 @@ function mockCanvasContext(rgbaFn: (size: number) => Uint8ClampedArray) {
       if (tag === 'canvas') {
         const mockCanvas = originalCreateElement('canvas')
         const mockCtx = {
+          fillStyle: '',
+          fillRect: vi.fn(),
           drawImage: vi.fn(),
           getImageData: vi.fn((_x: number, _y: number, w: number, h: number) => {
             const size = w * h
@@ -88,6 +90,187 @@ function mockCanvasContext(rgbaFn: (size: number) => Uint8ClampedArray) {
 }
 
 describe('preprocessImageToTensor', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  // -----------------------------------------------------------------------
+  // 透明背景の白合成
+  // -----------------------------------------------------------------------
+
+  it('TC15: 透明ピクセルは白(1.0)として扱われる（黒0.0ではない）', () => {
+    // Given: 全ピクセルが完全透明 (RGBA = 0,0,0,0)。白背景合成後の実画像データは白。
+    mockCanvasContext((size) => {
+      const data = new Uint8ClampedArray(size * 4)
+      data.fill(255) // 白背景に合成された結果
+      return data
+    })
+    const img = makeImageMock(64, 64)
+
+    // When
+    const { tensor } = preprocessImageToTensor(img)
+    const data = tensor.data as Float32Array
+
+    // Then
+    for (let i = 0; i < data.length; i++) {
+      expect(data[i]).toBeCloseTo(1.0)
+    }
+  })
+
+  it('TC16: 半透明ピクセルは白背景に合成された色になる', () => {
+    // Given: 半透明の黒 (0,0,0,128) を白背景に合成すると約 (127,127,127)
+    const composited = 127
+    mockCanvasContext((size) => {
+      const data = new Uint8ClampedArray(size * 4)
+      for (let i = 0; i < size; i++) {
+        data[i * 4] = composited
+        data[i * 4 + 1] = composited
+        data[i * 4 + 2] = composited
+        data[i * 4 + 3] = 255
+      }
+      return data
+    })
+    const img = makeImageMock(64, 64)
+
+    // When
+    const { tensor } = preprocessImageToTensor(img)
+    const data = tensor.data as Float32Array
+
+    // Then
+    for (let i = 0; i < data.length; i++) {
+      expect(data[i]).toBeCloseTo(composited / 255)
+    }
+  })
+
+  it('TC17: 不透明ピクセルは元のRGB値を保持する（回帰なし）', () => {
+    // Given: 不透明の青 (0,0,255,255)
+    const inputSize = 2
+    mockCanvasContext((size) => {
+      const data = new Uint8ClampedArray(size * 4)
+      for (let i = 0; i < size; i++) {
+        data[i * 4 + 2] = 255 // B
+        data[i * 4 + 3] = 255 // A
+      }
+      return data
+    })
+    const img = makeImageMock(32, 32)
+
+    // When
+    const { tensor } = preprocessImageToTensor(img, inputSize)
+    const data = tensor.data as Float32Array
+    const pixelCount = inputSize * inputSize
+
+    // Then
+    for (let i = 0; i < pixelCount; i++) {
+      expect(data[i]).toBeCloseTo(0.0) // R
+      expect(data[pixelCount + i]).toBeCloseTo(0.0) // G
+      expect(data[2 * pixelCount + i]).toBeCloseTo(1.0) // B
+    }
+  })
+
+  it('TC18: drawImage 前に fillStyle=#ffffff で fillRect(0,0,inputSize,inputSize) が呼ばれる', () => {
+    // Given
+    const fillStyleValues: string[] = []
+    const callOrder: string[] = []
+    const originalCreateElement = document.createElement.bind(document)
+    vi.spyOn(document, 'createElement').mockImplementation(
+      (tag: string, ...args: unknown[]) => {
+        if (tag === 'canvas') {
+          const mockCanvas = originalCreateElement('canvas')
+          const mockCtx: Record<string, unknown> = {
+            fillStyle: '',
+            fillRect: vi.fn(() => callOrder.push('fillRect')),
+            drawImage: vi.fn(() => callOrder.push('drawImage')),
+            getImageData: vi.fn((_x: number, _y: number, w: number, h: number) => {
+              fillStyleValues.push(mockCtx.fillStyle as string)
+              return { data: new Uint8ClampedArray(w * h * 4) } as unknown as ImageData
+            }),
+          }
+          vi.spyOn(mockCanvas, 'getContext').mockReturnValue(
+            mockCtx as unknown as CanvasRenderingContext2D,
+          )
+          ;(mockCanvas as unknown as { __ctx: typeof mockCtx }).__ctx = mockCtx
+          return mockCanvas
+        }
+        return originalCreateElement(tag, ...(args as [ElementCreationOptions?]))
+      },
+    )
+    const img = makeImageMock(64, 64)
+
+    // When
+    preprocessImageToTensor(img, 64)
+
+    // Then
+    expect(callOrder).toEqual(['fillRect', 'drawImage'])
+    expect(fillStyleValues[0]).toBe('#ffffff')
+  })
+
+  it('TC19: デフォルト inputSize で fillRect が 128x128 で呼ばれる', () => {
+    // Given
+    const fillRectArgs: number[][] = []
+    const originalCreateElement = document.createElement.bind(document)
+    vi.spyOn(document, 'createElement').mockImplementation(
+      (tag: string, ...args: unknown[]) => {
+        if (tag === 'canvas') {
+          const mockCanvas = originalCreateElement('canvas')
+          const mockCtx = {
+            fillStyle: '',
+            fillRect: vi.fn((...a: number[]) => fillRectArgs.push(a)),
+            drawImage: vi.fn(),
+            getImageData: vi.fn((_x: number, _y: number, w: number, h: number) =>
+              ({ data: new Uint8ClampedArray(w * h * 4) } as unknown as ImageData),
+            ),
+          }
+          vi.spyOn(mockCanvas, 'getContext').mockReturnValue(
+            mockCtx as unknown as CanvasRenderingContext2D,
+          )
+          return mockCanvas
+        }
+        return originalCreateElement(tag, ...(args as [ElementCreationOptions?]))
+      },
+    )
+    const img = makeImageMock(200, 150)
+
+    // When
+    preprocessImageToTensor(img)
+
+    // Then
+    expect(fillRectArgs[0]).toEqual([0, 0, MODEL_INPUT_SIZE, MODEL_INPUT_SIZE])
+  })
+
+  it('TC20: カスタム inputSize で fillRect が一致するサイズで呼ばれる', () => {
+    // Given
+    const fillRectArgs: number[][] = []
+    const originalCreateElement = document.createElement.bind(document)
+    vi.spyOn(document, 'createElement').mockImplementation(
+      (tag: string, ...args: unknown[]) => {
+        if (tag === 'canvas') {
+          const mockCanvas = originalCreateElement('canvas')
+          const mockCtx = {
+            fillStyle: '',
+            fillRect: vi.fn((...a: number[]) => fillRectArgs.push(a)),
+            drawImage: vi.fn(),
+            getImageData: vi.fn((_x: number, _y: number, w: number, h: number) =>
+              ({ data: new Uint8ClampedArray(w * h * 4) } as unknown as ImageData),
+            ),
+          }
+          vi.spyOn(mockCanvas, 'getContext').mockReturnValue(
+            mockCtx as unknown as CanvasRenderingContext2D,
+          )
+          return mockCanvas
+        }
+        return originalCreateElement(tag, ...(args as [ElementCreationOptions?]))
+      },
+    )
+    const img = makeImageMock(200, 150)
+
+    // When
+    preprocessImageToTensor(img, 32)
+
+    // Then
+    expect(fillRectArgs[0]).toEqual([0, 0, 32, 32])
+  })
+
   afterEach(() => {
     vi.restoreAllMocks()
   })
