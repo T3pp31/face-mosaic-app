@@ -86,6 +86,10 @@ export function preprocessImageRegionToTensor(
     throw new Error('Failed to get 2D context from canvas')
   }
 
+  // 透明ピクセルを黒(0,0,0)ではなく白背景として合成するため、描画前に白で塗りつぶす
+  ctx.fillStyle = '#ffffff'
+  ctx.fillRect(0, 0, inputSize, inputSize)
+
   ctx.drawImage(
     image,
     normalizedRegion.x,
