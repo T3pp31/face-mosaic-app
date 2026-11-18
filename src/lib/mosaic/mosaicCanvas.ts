@@ -83,12 +83,26 @@ export function drawImageWithMosaic(
   const width = getSourceWidth(image)
   const height = getSourceHeight(image)
 
-  canvas.width = width
-  canvas.height = height
+  // canvas.width/height への代入は値が同一でもバックストア再確保と
+  // 描画コンテキスト状態の初期化を引き起こすため、サイズが変化した場合のみ行う
+  let sizeChanged = false
+  if (canvas.width !== width) {
+    canvas.width = width
+    sizeChanged = true
+  }
+  if (canvas.height !== height) {
+    canvas.height = height
+    sizeChanged = true
+  }
 
   const ctx = canvas.getContext('2d')
   if (ctx === null) {
     throw new Error('Failed to get 2D context from canvas')
+  }
+
+  // サイズ変更時はコンテキスト状態が初期化されるため、明示的に再適用する
+  if (sizeChanged) {
+    ctx.imageSmoothingEnabled = false
   }
 
   ctx.clearRect(0, 0, width, height)
